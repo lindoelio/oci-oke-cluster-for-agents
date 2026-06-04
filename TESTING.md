@@ -93,11 +93,32 @@ kubectl get pods -A                  # No CrashLoopBackOff or ImagePullBackOff
 kubectl top nodes                    # Within Free Tier budget
 ```
 
+### NGINX Ingress + LoadBalancer
+```bash
+kubectl get svc -n ingress-nginx     # nginx-ingress-ingress-nginx-controller has external IP
+curl -s http://<INGRESS_IP>/         # Returns 404 (no default backend) — Ingress is reachable
+```
+
+### cert-manager Verification
+```bash
+kubectl get pods -n cert-manager     # All pods Running
+kubectl get clusterissuer            # letsencrypt-prod status is Ready (if letsencrypt_email is set)
+```
+
 ### Paperclip Smoke Test
 ```bash
-kubectl get svc -n paperclip         # LoadBalancer has external IP
-kubectl get pods -n paperclip        # All pods Running (paperclip + paperclip-db-0)
-curl -s http://<LB_IP>:3100/         # Returns HTML (Paperclip UI)
+kubectl get svc -n paperclip          # paperclip is ClusterIP (behind NGINX Ingress)
+kubectl get ingress -n paperclip      # paperclip Ingress exists, hostname set
+kubectl get pods -n paperclip         # All pods Running (paperclip + paperclip-db-0)
+curl -s -H "Host: <DOMAIN>" http://<INGRESS_IP>/ | head -20  # Returns HTML (Paperclip UI)
+# Or if no custom domain, access via IP directly via Ingress
+```
+
+### TLS Certificate Verification (with custom domain)
+```bash
+kubectl get certificate -n paperclip  # paperclip-tls shows Ready=True
+kubectl describe certificate paperclip-tls -n paperclip | grep "The certificate has been successfully issued"
+curl -v https://<DOMAIN>/ 2>&1 | grep "SSL certificate verify ok"
 ```
 
 ### OpenClaw Smoke Test

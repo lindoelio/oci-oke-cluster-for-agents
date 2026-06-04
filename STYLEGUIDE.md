@@ -25,6 +25,16 @@ Each `.tf` file follows this internal order:
 2. Resources grouped by logical purpose
 3. Blank line between resource blocks
 
+File responsibilities (one `.tf` per logical concern):
+- `main.tf` — Provider configuration, compartment, cluster discovery, kubeconfig
+- `oke.tf` — OKE module + CRI-O fix DaemonSet
+- `paperclip.tf` — Paperclip workload (direct deployment, no operator)
+- `openclaw.tf` — OpenClaw operator + instance
+- `cert-manager.tf` — cert-manager Helm release + Let's Encrypt ClusterIssuer
+- `ingress.tf` — NGINX Ingress Controller + Paperclip Ingress
+- `variables.tf` — All variables, grouped by component
+- `output.tf` — Outputs + post-deploy instructions
+
 ```hcl
 ################################################################################
 # Section Title
@@ -61,6 +71,8 @@ resource "time_sleep" "after_example" {
 - `paperclip_` — Paperclip workload variables
 - `openclaw_` — OpenClaw workload variables
 - `enable_` — Boolean toggle for conditional deployments
+- `letsencrypt_` — Let's Encrypt / cert-manager variables (email, etc.)
+- `nginx_ingress_` — NGINX Ingress Controller variables (chart version)
 
 ### Resource Naming
 

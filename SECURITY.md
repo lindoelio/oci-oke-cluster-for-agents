@@ -17,6 +17,8 @@ This project is designed for **development, learning, and experimentation** on O
 |---|---|---|
 | `anthropic_api_key` | Terraform variable (sensitive) | K8s Secret `paperclip-api-keys` |
 | `openai_api_key` | Terraform variable (sensitive) | K8s Secret `paperclip-api-keys` |
+| `openrouter_api_key` | Terraform variable (sensitive) | K8s Secret `paperclip-api-keys` |
+| `ollama_cloud_api_key` | Terraform variable (sensitive) | K8s Secret `paperclip-api-keys` |
 | `openclaw_llm_api_key` | Terraform variable (sensitive) | K8s Secret `openclaw-llm-keys` |
 | `openclaw_telegram_bot_token` | Terraform variable (sensitive) | K8s Secret `openclaw-telegram` |
 | `BETTER_AUTH_SECRET` | `random_password` resource | K8s Secret `paperclip-auth` |
@@ -36,17 +38,19 @@ This project is designed for **development, learning, and experimentation** on O
 ### Current State
 
 | Component | Exposure | Notes |
-|---|---|---|
+|---|---|---|---|
 | OKE Control Plane | Public (`0.0.0.0/0`) | API server accessible from any IP |
 | Worker Nodes | Public or Private | Controlled by `oci_public_workers` (default: `false`) |
-| Paperclip Service | LoadBalancer or ClusterIP | Controlled by `paperclip_exposure` (default: `"public"`) |
+| NGINX Ingress LB | Public (OCI 10Mbps) | Single entry point; forwards to ClusterIP services |
+| Paperclip Service | ClusterIP | Internal only, accessed through NGINX Ingress |
 | OpenClaw Service | ClusterIP | Internal only |
 
 ### Risks
 
 - **Control plane open to the internet** — `control_plane_allowed_cidrs = ["0.0.0.0/0"]` allows API server access from any IP. Acceptable for development; dangerous for production.
 - **No NetworkPolicies enforced** — While Paperclip's CRD enables `networkPolicy: true`, cluster-wide network policies are not defined.
-- **No TLS termination** — Paperclip is served over HTTP. The LoadBalancer does not terminate TLS.
+- **No default TLS** — Without a custom domain configured, Paperclip serves over HTTP. TLS is available via cert-manager + Let's Encrypt when `paperclip_custom_domain` and `letsencrypt_email` are set.
+- **NGINX Ingress is the single entry point** — A compromise of the ingress controller could expose all internal services.
 <!-- END managed:security-network -->
 
 <!-- BEGIN managed:security-auth -->
@@ -76,7 +80,7 @@ Complete these items before exposing the cluster to real workloads or users.
 - [ ] **Restrict API server CIDRs** — Change `control_plane_allowed_cidrs` in `oke.tf` to your IP or VPN CIDR.
 - [ ] **Private worker nodes** — Set `oci_public_workers = false` to place nodes behind NAT.
 - [ ] **Private control plane** — Set `control_plane_is_public = false` (requires VPN or bastion).
-- [ ] **TLS for Paperclip** — Set `paperclip_exposure = "private"` and add an ingress controller with TLS termination (e.g., cert-manager + nginx-ingress).
+- [ ] **TLS for Paperclip** — Set `paperclip_custom_domain` and `letsencrypt_email` in `terraform.tfvars` to enable cert-manager + Let's Encrypt TLS (built-in, just needs configuration).
 - [ ] **Network policies** — Define cluster-wide NetworkPolicies to restrict pod-to-pod traffic.
 
 ### Secrets

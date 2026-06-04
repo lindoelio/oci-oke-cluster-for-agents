@@ -79,6 +79,10 @@ For operator-based workloads, follow this pattern:
 For direct deployments (no operator), follow the `paperclip.tf` pattern:
    - Namespace, secrets, Deployment/StatefulSet, Service
 
+For infrastructure components (ingress, TLS, monitoring), follow these patterns:
+   - `ingress.tf` — NGINX Ingress Controller Helm release, wait-for-LB time_sleep, Ingress resource, IP detection data source
+   - `cert-manager.tf` — Helm release, CRD readiness sleep, ClusterIssuer CRD
+
 2. **Add variables** to `variables.tf`:
    - `enable_<workload>` toggle (bool, default `true`)
    - Config variables with descriptions and sensible defaults

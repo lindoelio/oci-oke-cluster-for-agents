@@ -1,43 +1,56 @@
-# OKE Cluster With Paperclip + OpenClaw
+# OKE Cluster with Paperclip + OpenClaw
 
-A Terraform project for deploying an Oracle Kubernetes Engine (OKE) cluster on OCI Free Tier, with **Paperclip** (AI agent orchestration platform) and **OpenClaw** (AI agent runtime).
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Terraform](https://img.shields.io/badge/Terraform-%3E%3D1.14-623CE4?logo=terraform)](https://www.terraform.io)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-v1.36-326CE5?logo=kubernetes)](https://kubernetes.io)
+
+A single-command Terraform deployment for an OCI Free Tier Kubernetes cluster with **Paperclip** (AI agent orchestration) and **OpenClaw** (AI agent runtime). Batteries included — NGINX Ingress, cert-manager with Let's Encrypt, and managed PostgreSQL, all within the free tier.
 
 ## Features
 
+- **Single `terraform apply`** — Cluster, networking, apps, ingress, and TLS in one shot
 - **OKE Cluster** — OCI-managed Kubernetes via `oracle-terraform-modules/oke/oci` v5.4.3
 - **Free Tier** — 2x ARM-based `VM.Standard.A1.Flex` nodes (4 OCPUs, 24GB RAM total)
-- **Kubernetes v1.36.0** — Flannel CNI, public control plane, public workers
-- **Paperclip** — Agent orchestration UI with managed PostgreSQL (direct deployment, no operator required)
-- **OpenClaw** — Agent runtime with Telegram integration, deployed via official operator (`openclaw-operator` v0.34.5)
-- **CRI-O Short-Name Fix** — DaemonSet that configures `docker.io` as default registry on all nodes
-- **OCI Child Compartment** — All project resources isolated in a Terraform-managed child compartment
+- **Paperclip** — Agent orchestration UI with managed PostgreSQL (direct deployment, no operator)
+- **OpenClaw** — Agent runtime with Telegram integration, deployed via official operator (v0.34.5)
+- **NGINX Ingress Controller** — Single OCI LoadBalancer entry point for all HTTP/HTTPS traffic
+- **cert-manager + Let's Encrypt** — Automatic TLS certificates for custom domains
+- **CRI-O Short-Name Fix** — DaemonSet configuring `docker.io` as default registry on all nodes
+- **OCI Child Compartment** — All resources isolated in a Terraform-managed child compartment
 - **No `hashicorp/kubernetes` provider** — Uses `hashicorp-oss/kubectl` to avoid known hangs on K8s 1.36.x
 
 ## Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│                          OCI Tenancy (Free Tier)                      │
+│                        OCI Tenancy (Free Tier)                       │
 │  ┌───────────────────────────────────────────────────────────────┐   │
-│  │                Child Compartment (tf-managed)                   │   │
-│  │                                                                │   │
-│  │  ┌── OKE Cluster (K8s v1.36.0, 2x A1.Flex, ARM) ──────────┐  │   │
-│  │  │  kube-system/                                            │  │   │
-│  │  │    └─ crio-shortname-fix (DaemonSet)                     │  │   │
-│  │  │                                                          │  │   │
-│  │  │  paperclip/                                              │  │   │
-│  │  │    ├─ Paperclip App Deployment (:3100)                   │  │   │
-│  │  │    ├─ PostgreSQL StatefulSet (17-alpine)                 │  │   │
-│  │  │    └─ Service: LoadBalancer (OCI free LB)                │  │   │
-│  │  │                                                          │  │   │
-│  │  │  openclaw-system/                                        │  │   │
-│  │  │    └─ openclaw-operator (Helm, v0.34.5)                  │  │   │
-│  │  │                                                          │  │   │
-│  │  │  openclaw/                                               │  │   │
-│  │  │    ├─ OpenClawInstance CRD → OpenClaw Runtime            │  │   │
-│  │  │    └─ Service: ClusterIP (:18789)                        │  │   │
-│  │  └──────────────────────────────────────────────────────────┘  │   │
-│  │                                                                │   │
+│  │              Child Compartment (tf-managed)                    │   │
+│  │                                                               │   │
+│  │  ┌── OKE Cluster (K8s v1.36.0, 2x A1.Flex ARM) ──────────┐  │   │
+│  │  │                                                        │  │   │
+│  │  │  kube-system/                                          │  │   │
+│  │  │    └─ crio-shortname-fix (DaemonSet)                   │  │   │
+│  │  │                                                        │  │   │
+│  │  │  ingress-nginx/                                        │  │   │
+│  │  │    └─ NGINX Ingress Controller (OCI LB, 10Mbps)        │  │   │
+│  │  │                                                        │  │   │
+│  │  │  cert-manager/                                         │  │   │
+│  │  │    └─ cert-manager + Let's Encrypt ClusterIssuer       │  │   │
+│  │  │                                                        │  │   │
+│  │  │  paperclip/                                            │  │   │
+│  │  │    ├─ Paperclip Deployment (:3100)                     │  │   │
+│  │  │    ├─ PostgreSQL StatefulSet (17-alpine)               │  │   │
+│  │  │    └─ Ingress (NGINX) + optional TLS (cert-manager)    │  │   │
+│  │  │                                                        │  │   │
+│  │  │  openclaw-system/                                      │  │   │
+│  │  │    └─ openclaw-operator (Helm, v0.34.5)                │  │   │
+│  │  │                                                        │  │   │
+│  │  │  openclaw/                                             │  │   │
+│  │  │    ├─ OpenClawInstance CRD → OpenClaw Runtime          │  │   │
+│  │  │    └─ Service: ClusterIP (:18789)                      │  │   │
+│  │  └────────────────────────────────────────────────────────┘  │   │
+│  │                                                               │   │
 │  │  ┌── VCN + Public Subnets (OKE module) ─────────────────────┐  │   │
 │  │  └──────────────────────────────────────────────────────────┘  │   │
 │  └───────────────────────────────────────────────────────────────┘   │
@@ -48,14 +61,16 @@ A Terraform project for deploying an Oracle Kubernetes Engine (OKE) cluster on O
 
 | Component | CPU | Memory | Storage |
 |---|---|---|---|
-| OKE Nodes (2x A1.Flex) | 4000m | 24Gi | 50GB boot each |
+| OKE Nodes (2x A1.Flex) | 4000m | 24Gi | 100GB (50GB boot each) |
+| NGINX Ingress Controller | ~50m | ~128Mi | — |
+| cert-manager | ~30m | ~128Mi | — |
 | Paperclip + PostgreSQL | ~750m | ~1Gi | 15Gi (5Gi + 10Gi) |
 | OpenClaw | ~250m | ~512Mi | 5Gi |
 | CRI-O fix DaemonSet | ~4m | ~32Mi | — |
-| **Used** | **~1Gi** | **~1.5Gi** | **~20Gi** |
+| **Used** | **~1.1Gi** | **~1.8Gi** | **~20Gi** |
 | **Free Tier Limit** | 4000m | 24Gi | 200Gi |
 
-All components fit comfortably within OCI free tier limits. The OCI Load Balancer (1 free per OKE cluster) is used for Paperclip external access. Both Paperclip (`ghcr.io/paperclipai/paperclip`) and OpenClaw (`ghcr.io/openclaw/openclaw`) images are confirmed ARM64-compatible.
+All components fit comfortably within OCI free tier limits. The OCI Load Balancer (1 free 10Mbps per OKE cluster) is shared by the NGINX Ingress Controller. All images are confirmed ARM64-compatible.
 
 ## Prerequisites
 
@@ -86,11 +101,12 @@ All components fit comfortably within OCI free tier limits. The OCI Load Balance
 ### 1. Clone and Configure
 
 ```bash
-git clone <repo-url> && cd oci-oke-cluster
-cp terraform.tfvars.example terraform.tfvars
+git clone https://github.com/lindoelio/oci-oke-cluster-for-agents.git
+cd oci-oke-cluster-for-agents
+cp src/terraform.tfvars.example src/terraform.tfvars
 ```
 
-Edit `terraform.tfvars` with your values:
+Edit `src/terraform.tfvars` with your values:
 
 ```hcl
 # Project
@@ -112,7 +128,7 @@ oci_oke_node_shape_memory_in_gbs = 12
 # Paperclip (agent orchestration UI)
 paperclip_exposure = "public"
 
-# LLM API keys for Paperclip
+# LLM API keys for Paperclip (at least one required)
 anthropic_api_key = "sk-ant-..."
 
 # OpenClaw (agent runtime)
@@ -123,6 +139,10 @@ openclaw_llm_api_key  = "your-api-key-here"
 # Telegram (optional)
 openclaw_telegram_enabled   = true
 openclaw_telegram_bot_token = "123456:ABC-DEF..."
+
+# Custom domain with HTTPS (optional)
+# paperclip_custom_domain = "paperclip.example.com"
+# letsencrypt_email       = "admin@example.com"
 ```
 
 ### 2. Deploy
@@ -138,19 +158,22 @@ terraform apply
 After apply completes, follow the instructions from `terraform output post_deploy_instructions`:
 
 1. **Configure kubectl** — the output shows the exact command
-2. **Get Paperclip URL** — use the `kubectl get svc` command to find the LoadBalancer IP
-3. **Open Paperclip** at `http://<IP>:3100` in your browser:
+2. **Get the Paperclip URL** — check `terraform output paperclip_url` or the post-deploy instructions
+3. **Open Paperclip** in your browser:
    - Create your admin account
    - Go to Company Settings > Agents > **Generate OpenClaw Invite Prompt**
 4. **Connect OpenClaw** — paste the invite prompt into OpenClaw (via Telegram or direct access). Agents will appear in the Paperclip dashboard.
+5. **(Optional) Set up HTTPS** — if you configured `paperclip_custom_domain` and `letsencrypt_email`, cert-manager automatically provisions a Let's Encrypt certificate
 
 ### 4. Verify
 
 ```bash
 kubectl get nodes
 kubectl get pods -A
-kubectl get svc -n paperclip    # Should show LoadBalancer with external IP
-kubectl get pods -n openclaw    # Should show OpenClaw pod running
+kubectl get ingress -n paperclip     # Paperclip Ingress with NGINX
+kubectl get svc -n ingress-nginx     # LoadBalancer external IP
+kubectl get pods -n openclaw         # OpenClaw pod running
+kubectl get certificate -n paperclip # TLS cert (if custom domain configured)
 ```
 
 ## Configuration Reference
@@ -164,6 +187,7 @@ kubectl get pods -n openclaw    # Should show OpenClaw pod running
 | `oci_region` | Primary OCI region | `"sa-saopaulo-1"` |
 | `oci_home_region` | OCI home region for tenancy-scoped operations | `"sa-saopaulo-1"` |
 | `oci_compartment_id` | Parent compartment OCID | — |
+| `oci_project_compartment_id` | Existing project compartment (optional, skip creation) | `""` |
 | `oci_public_workers` | Place workers in public subnet with public IPs | `false` |
 
 ### Node Pool
@@ -189,13 +213,19 @@ kubectl get pods -n openclaw    # Should show OpenClaw pod running
 |---|---|---|
 | `paperclip_image_repository` | Application image repository | `"ghcr.io/paperclipai/paperclip"` |
 | `paperclip_image_tag` | Application image tag | `"latest"` |
-| `paperclip_exposure` | `"public"` (LoadBalancer) or `"private"` (ClusterIP) | `"public"` |
+| `paperclip_exposure` | `"public"` (NGINX Ingress) or `"private"` (ClusterIP only) | `"public"` |
+| `paperclip_public_url` | Explicit public URL (auto-detected from Ingress IP if empty) | `""` |
+| `paperclip_custom_domain` | Custom domain for HTTPS + Let's Encrypt (e.g. `paperclip.example.com`) | `""` |
+| `letsencrypt_email` | Email for Let's Encrypt ACME account | `""` |
+| `nginx_ingress_chart_version` | NGINX Ingress Controller Helm chart version | `"4.12.0"` |
 | `paperclip_db_storage_size` | PostgreSQL PVC size | `"10Gi"` |
 | `paperclip_storage_size` | Data persistence PVC size | `"5Gi"` |
 | `paperclip_cpu_limit` | CPU limit | `"1000m"` |
 | `paperclip_memory_limit` | Memory limit | `"2Gi"` |
 | `anthropic_api_key` | Anthropic API key (sensitive) | `""` |
 | `openai_api_key` | OpenAI API key (sensitive) | `""` |
+| `openrouter_api_key` | OpenRouter API key (sensitive) | `""` |
+| `ollama_cloud_api_key` | Ollama Cloud API key (sensitive) | `""` |
 
 ### OpenClaw
 
@@ -212,30 +242,36 @@ kubectl get pods -n openclaw    # Should show OpenClaw pod running
 | `openclaw_memory_limit` | Memory limit | `"1Gi"` |
 | `openclaw_telegram_enabled` | Telegram bot integration | `true` |
 | `openclaw_telegram_bot_token` | Telegram bot token (sensitive) | `""` |
+| `openclaw_telegram_owner_id` | Telegram numeric user ID for auto-approval | `""` |
 
 ## Project Structure
 
 ```
 .
-├── README.md                   # This file — quick start and reference
-├── AGENTS.md                   # AI agent guidelines
-├── ARCHITECTURE.md             # System architecture and component layout
-├── CONTRIBUTING.md             # Contribution workflow
-├── SECURITY.md                 # Security model and hardening checklist
-├── STYLEGUIDE.md              # Terraform formatting and naming rules
-├── TESTING.md                  # Validation and testing strategy
-├── LICENSE                     # MIT License
-├── .gitignore                  # Git ignore rules
-├── .terraform.lock.hcl         # Provider version lock file
-├── terraform.tfvars.example    # Example configuration (copy to src/terraform.tfvars)
+├── README.md
+├── LICENSE                         # MIT License
+├── AGENTS.md                       # AI agent guidelines
+├── ARCHITECTURE.md                 # System architecture and component layout
+├── CONTRIBUTING.md                 # Contribution workflow
+├── SECURITY.md                     # Security model and hardening checklist
+├── STYLEGUIDE.md                   # Terraform formatting and naming rules
+├── TESTING.md                      # Validation and testing strategy
+├── .gitignore
 │
-└── src/                        ← All Terraform source files
-    ├── main.tf                 # Providers, compartment, cluster discovery
-    ├── oke.tf                  # OKE module + CRI-O fix DaemonSet
-    ├── paperclip.tf            # Paperclip Deployment + PostgreSQL StatefulSet
-    ├── openclaw.tf             # OpenClaw operator + OpenClawInstance CRD
-    ├── variables.tf            # All variable definitions
-    └── output.tf               # Terraform outputs + post-deploy instructions
+└── src/
+    ├── main.tf                     # Providers, compartment, cluster discovery
+    ├── oke.tf                      # OKE module + CRI-O fix DaemonSet
+    ├── paperclip.tf                # Paperclip Deployment + PostgreSQL StatefulSet
+    ├── openclaw.tf                 # OpenClaw operator + OpenClawInstance CRD
+    ├── cert-manager.tf             # cert-manager Helm release + Let's Encrypt ClusterIssuer
+    ├── ingress.tf                  # NGINX Ingress Controller + Paperclip Ingress
+    ├── variables.tf                # All variable definitions
+    ├── output.tf                   # Terraform outputs + post-deploy instructions
+    ├── scripts/                    # Onboarding, IP detection, and patching helpers
+    │   ├── paperclip_onboard.sh
+    │   ├── detect_ingress_ip.py
+    │   └── patch_paperclip.py
+    └── terraform.tfvars.example    # Example configuration (copy to terraform.tfvars)
 ```
 
 ## Provider Versions (Pinned)
@@ -256,28 +292,25 @@ kubectl get pods -n openclaw    # Should show OpenClaw pod running
 
 ## Before Going to Production
 
-This project is designed for **development, learning, and experimentation**. The defaults prioritize simplicity and cost-effectiveness over security. Before exposing this cluster to real workloads or users, consider the following hardening steps:
+This project is designed for **development, learning, and experimentation**. The defaults prioritize simplicity and cost-effectiveness over security. See [SECURITY.md](SECURITY.md) for the full hardening checklist. Key items:
 
 ### Networking & Access
 
-- **Restrict API server access** — The control plane is open to `0.0.0.0/0` by default for ease of use. Change `control_plane_allowed_cidrs` in `oke.tf` to your IP or VPN CIDR.
-- **Use private worker nodes** — Set `oci_public_workers = false` to place nodes in a private subnet with NAT/Service Gateway. Workers currently have public IPs.
-- **Private control plane** — Set `control_plane_is_public = false` in `oke.tf` (requires VPN or bastion access to the API endpoint).
-- **Restrict Paperclip exposure** — Set `paperclip_exposure = "private"` and put a reverse proxy or ingress controller with TLS in front of it.
+- **Restrict API server access** — The control plane is open to `0.0.0.0/0`. Change `control_plane_allowed_cidrs` in `oke.tf` to your IP or VPN CIDR.
+- **Use private worker nodes** — Set `oci_public_workers = false` to place nodes in a private subnet.
+- **Private control plane** — Set `control_plane_is_public = false` in `oke.tf` (requires VPN or bastion).
 
 ### Secrets & Authentication
 
-- **Rotate the auth secret** — The `random_password.paperclip_auth` resource regenerates on state loss. For production, manage this secret externally (e.g., OCI Vault) and inject it via `kubectl_manifest`.
-- **Rotate API keys** — Change LLM API keys (`anthropic_api_key`, `openai_api_key`, `openclaw_llm_api_key`) periodically and never commit them to version control.
-- **Use Kubernetes Secrets encryption** — Enable OCI KMS envelope encryption for etcd secrets at rest.
+- **External secret management** — Move API keys to OCI Vault and inject via External Secrets Operator.
+- **etcd encryption** — Enable OCI KMS envelope encryption for Kubernetes secrets at rest.
+- **Rotate API keys** — Rotate LLM API keys periodically; never commit them to version control.
 
 ### Operational
 
-- **Pin provider versions** — Provider versions are pinned in `main.tf`. Review and update them deliberately.
 - **Remote state** — Move Terraform state to OCI Object Storage backend for team collaboration and state locking.
-- **Monitoring & alerting** — Add Prometheus/Grafana or OCI Monitoring for cluster health, node utilization, and pod status.
-- **Backup strategy** — Back up Paperclip's managed PostgreSQL data and any persistent volumes before major upgrades.
-- **Resource limits** — Review and tune CPU/memory requests and limits based on actual workload profiles.
+- **Monitoring & alerting** — Add Prometheus/Grafana or OCI Monitoring.
+- **Backup strategy** — Back up Paperclip's PostgreSQL data before upgrades.
 
 ## Cleanup
 
@@ -291,7 +324,7 @@ terraform plan -destroy
 terraform destroy
 ```
 
-> **Note**: PersistentVolumeClaims trigger OCI Block Volume deletion automatically. Verify in the OCI Console that all volumes are removed after destroy. The LoadBalancer service deletion also removes the OCI Load Balancer.
+> **Note**: PersistentVolumeClaims trigger OCI Block Volume deletion automatically. Verify in the OCI Console that all volumes are removed after destroy. The NGINX Ingress LoadBalancer service deletion also removes the OCI Load Balancer.
 
 ## Troubleshooting
 
@@ -331,3 +364,16 @@ This happens when the Terraform state has null fields in volume entries. Run:
 terraform state rm <failed-resource-address>
 terraform apply
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE) for details.
+
+## Documentation
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) — System architecture and component layout
+- [SECURITY.md](SECURITY.md) — Security model and hardening checklist
+- [CONTRIBUTING.md](CONTRIBUTING.md) — Contribution workflow
+- [STYLEGUIDE.md](STYLEGUIDE.md) — Terraform formatting and naming rules
+- [TESTING.md](TESTING.md) — Validation and testing strategy
+- [AGENTS.md](AGENTS.md) — AI agent guidelines

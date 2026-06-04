@@ -22,10 +22,17 @@ This project provisions an OCI Free Tier Kubernetes cluster (OKE) with two AI ag
 │  │  │  kube-system/                                          │  │   │
 │  │  │    └─ crio-shortname-fix (DaemonSet)                   │  │   │
 │  │  │                                                        │  │   │
+│  │  │  ingress-nginx/                                        │  │   │
+│  │  │    └─ NGINX Ingress Controller (Helm, OCI LB)          │  │   │
+│  │  │                                                        │  │   │
+│  │  │  cert-manager/                                         │  │   │
+│  │  │    └─ cert-manager (Helm) + Let's Encrypt Issuer       │  │   │
+│  │  │                                                        │  │   │
 │  │  │  paperclip/                 openclaw-system/           │  │   │
 │  │  │    ├─ Paperclip Deployment    └─ openclaw-operator     │  │   │
 │  │  │    ├─ PostgreSQL StatefulSet     (Helm, v0.34.5)       │  │   │
-│  │  │    └─ LoadBalancer (:3100)                             │  │   │
+│  │  │    ├─ Ingress (NGINX, :80)                             │  │   │
+│  │  │    └─ TLS (cert-manager)                               │  │   │
 │  │  │                             openclaw/                  │  │   │
 │  │  │                               ├─ OpenClawInstance CRD  │  │   │
 │  │  │                               └─ ClusterIP (:18789)    │  │   │
@@ -50,8 +57,23 @@ This project provisions an OCI Free Tier Kubernetes cluster (OKE) with two AI ag
 | **NAT Gateway** | Created only when `oci_public_workers = false` |
 | **OKE Cluster** | Basic type, Flannel CNI, public control plane |
 | **Node Pool** | ARM-based `VM.Standard.A1.Flex`, configurable size/OCPUs/memory |
-| **Load Balancer** | OCI free-tier LB for Paperclip (when `paperclip_exposure = "public"`) |
+| **Load Balancer** | OCI free-tier 10Mbps LB via NGINX Ingress Controller Service |
 | **CRI-O Fix** | DaemonSet configuring `docker.io` as default registry on all nodes |
+
+### Kubernetes Infrastructure
+
+#### NGINX Ingress Controller
+- **Helm chart:** `ingress-nginx` (v4.12.0) from `https://kubernetes.github.io/ingress-nginx`
+- **Namespace:** `ingress-nginx`
+- **Exposure:** LoadBalancer (OCI free 10Mbps shape) — single entry point for all HTTP/HTTPS traffic
+- **Purpose:** Unified ingress point replacing per-app LoadBalancers
+
+#### cert-manager + Let's Encrypt
+- **Helm chart:** `cert-manager` (v1.16.2) from `https://charts.jetstack.io`
+- **Namespace:** `cert-manager`
+- **Issuer:** `ClusterIssuer` with Let's Encrypt production ACME, HTTP-01 challenge via NGINX Ingress
+- **Conditional:** Created only when `letsencrypt_email` is set and a `paperclip_custom_domain` is configured
+- **Purpose:** Automatic TLS certificate issuance for custom domains
 
 ### Kubernetes Workloads
 
@@ -59,9 +81,9 @@ This project provisions an OCI Free Tier Kubernetes cluster (OKE) with two AI ag
 - **Deployment:** Direct Kubernetes Deployment (no operator — the Paperclip operator Helm chart is not published on GHCR)
 - **Image:** `ghcr.io/paperclipai/paperclip` (ARM64 confirmed)
 - **Database:** PostgreSQL 17-alpine StatefulSet with `oci-bv` storage class, `PGDATA` subdirectory for OCI Block Volumes
-- **Exposure:** LoadBalancer (public) or ClusterIP (private)
+- **Exposure:** ClusterIP service behind NGINX Ingress Controller, with optional cert-manager TLS for custom domains
 - **Auth:** Auto-generated `BETTER_AUTH_SECRET` via `random_password`, `PAPERCLIP_AUTH_BASE_URL_MODE=explicit`
-- **API Keys:** Injected from `paperclip-api-keys` secret (Anthropic, OpenAI)
+- **API Keys:** Injected from `paperclip-api-keys` secret (Anthropic, OpenAI, OpenRouter, Ollama)
 
 #### OpenClaw (Agent Runtime)
 - **Operator:** Deployed via Helm from `oci://ghcr.io/paperclipinc/charts/openclaw-operator` (v0.34.5)
@@ -93,12 +115,19 @@ OKE Module (VCN + Cluster + Nodes)
   → data.external.oke_token (Python: token generation)
   → Provider configuration (kubectl, helm)
     → kubectl_manifest.crio_shortname_fix (DaemonSet)
-    → helm_release.openclaw_operator ──┐
-    → kubectl_manifest.paperclip_* ────┤
-                                       ↓
-                              time_sleep (30s)
-                                       ↓
-                              kubectl_manifest.openclaw_* (namespace, secrets, CRD)
+    → helm_release.nginx_ingress ──┐
+    → helm_release.cert_manager ───┤
+                                   ↓
+                          time_sleep.wait_for_ingress_lb (120s)
+                                   ↓
+                          data.external.ingress_ip (Python: IP detection)
+                                   ↓
+    → kubectl_manifest.paperclip_* ──────┐
+    → helm_release.openclaw_operator ────┤
+                                          ↓
+                                 time_sleep (30s)
+                                          ↓
+                                 kubectl_manifest.openclaw_* (namespace, secrets, CRD)
 ```
 <!-- END managed:architecture-deployment-flow -->
 
@@ -155,10 +184,12 @@ Terraform variables (sensitive)
 | Component | CPU | Memory | Storage |
 |---|---|---|---|
 | OKE Nodes (2x A1.Flex) | 4000m | 24Gi | 100GB (50GB boot each) |
+| NGINX Ingress Controller | ~50m | ~128Mi | — |
+| cert-manager | ~30m | ~128Mi | — |
 | Paperclip + PostgreSQL | ~750m | ~1Gi | 15Gi |
 | OpenClaw | ~250m | ~512Mi | 5Gi |
 | CRI-O fix DaemonSet | ~4m | ~32Mi | — |
-| **Total Used** | **~1Gi** | **~1.5Gi** | **~20Gi** |
+| **Total Used** | **~1.1Gi** | **~1.8Gi** | **~20Gi** |
 | **Free Tier Limit** | **4000m** | **24Gi** | **200Gi** |
 <!-- END managed:architecture-resource-budget -->
 

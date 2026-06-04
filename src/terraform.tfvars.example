@@ -1,0 +1,70 @@
+# =============================================================================
+# OKE Cluster with Paperclip + OpenClaw — Example Terraform Variables
+# Copy this file to terraform.tfvars and fill in your values:
+#   cp terraform.tfvars.example terraform.tfvars
+# =============================================================================
+
+# --- Project ---
+project_prefix = "myproject"
+
+# --- OCI General ---
+# Get these from: oci iam compartment list --compartment-id-in-subtree true
+oci_tenancy_id   = "ocid1.tenancy.oc1..aaaaaaaa..."
+oci_region       = "sa-saopaulo-1"
+oci_home_region  = "sa-saopaulo-1"
+
+# Parent compartment (all resources go into a child compartment under this)
+oci_compartment_id = "ocid1.tenancy.oc1..aaaaaaaa..."
+
+# Existing project compartment (optional — if set, uses this instead of creating a new one)
+# oci_project_compartment_id = "ocid1.compartment.oc1..aaaaaaaa..."
+
+# Place worker nodes in a public subnet (no NAT Gateway, saves cost)
+oci_public_workers = true
+
+# --- Node Pool ---
+oci_oke_node_shape               = "VM.Standard.A1.Flex"
+oci_oke_node_pool_size           = 2
+oci_oke_node_shape_ocpus         = 2
+oci_oke_node_shape_memory_in_gbs = 12
+
+# --- App Toggles ---
+enable_paperclip = true
+enable_openclaw  = true
+
+# --- Paperclip (Agent Orchestration UI) ---
+# Paperclip is deployed directly (no operator) with a managed PostgreSQL
+# paperclip_image_repository = "ghcr.io/paperclipai/paperclip"
+# paperclip_image_tag        = "latest"
+paperclip_exposure          = "public"  # "public" = LoadBalancer, "private" = ClusterIP
+# paperclip_public_url       = ""  # Auto-detected from Ingress LB IP when empty. Set to override.
+# paperclip_custom_domain    = "paperclip.example.com"  # Enables HTTPS + Let's Encrypt
+# letsencrypt_email          = "admin@example.com"  # Required for Let's Encrypt ACME
+# paperclip_db_storage_size  = "10Gi"
+# paperclip_storage_size     = "5Gi"
+# paperclip_cpu_limit        = "1000m"
+# paperclip_memory_limit     = "2Gi"
+
+# LLM API Keys (at least one required for Paperclip agents)
+# All keys are optional — Paperclip will use whichever providers are configured
+# anthropic_api_key = "sk-ant-..."
+# openai_api_key    = "sk-..."
+# openrouter_api_key = "sk-or-v1-..."  # Enables OpenRouter (Pi, Hermes, OpenCode, etc.)
+# ollama_cloud_api_key = "sk-oll-..."   # Enables Ollama Cloud models
+
+# --- OpenClaw (Agent Runtime) ---
+# OpenClaw is deployed via the openclaw-operator Helm chart
+# openclaw_chart_version     = "0.34.5"
+# openclaw_image_repository  = "ghcr.io/openclaw/openclaw"
+# openclaw_image_tag         = "latest"
+openclaw_llm_provider    = "openrouter"
+openclaw_llm_model       = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+openclaw_llm_api_key     = "your-llm-api-key-here"
+# openclaw_storage_size    = "5Gi"
+# openclaw_cpu_limit       = "500m"
+# openclaw_memory_limit    = "1Gi"
+
+# Telegram integration (optional)
+openclaw_telegram_enabled   = true
+openclaw_telegram_bot_token = "123456:ABC-DEF..."
+# openclaw_telegram_owner_id = "8547618136"  # Your Telegram numeric user ID for auto-approval

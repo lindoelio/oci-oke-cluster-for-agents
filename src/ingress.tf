@@ -25,6 +25,8 @@ resource "helm_release" "nginx_ingress" {
     <<-EOF
     controller:
       service:
+        annotations:
+          service.beta.kubernetes.io/oci-load-balancer-shape: "10Mbps"
         type: LoadBalancer
       publishService:
         enabled: true

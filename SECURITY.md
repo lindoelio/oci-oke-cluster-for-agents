@@ -21,6 +21,10 @@ This project is designed for **development, learning, and experimentation** on O
 | `ollama_cloud_api_key` | Terraform variable (sensitive) | K8s Secret `paperclip-api-keys` |
 | `openclaw_llm_api_key` | Terraform variable (sensitive) | K8s Secret `openclaw-llm-keys` |
 | `openclaw_telegram_bot_token` | Terraform variable (sensitive) | K8s Secret `openclaw-telegram` |
+| `OPENCODE_SERVER_PASSWORD` | `random_password` resource | K8s Secret `opencode-auth` |
+| `opencode_registry_token` | Terraform variable (sensitive) | Docker registry auth (Terraform only, not K8s) |
+| `github_token` | Terraform variable (sensitive) | K8s Secret `opencode-dev-credentials` |
+| `gcp_service_account_key` | Terraform variable (sensitive) | K8s Secret `opencode-dev-credentials` |
 | `BETTER_AUTH_SECRET` | `random_password` resource | K8s Secret `paperclip-auth` |
 | `POSTGRES_PASSWORD` | `random_password` resource | K8s Secret `paperclip-db` |
 | OCI auth | OCI CLI API key (`DEFAULT` profile) | Local OCI CLI config (not in Terraform) |
@@ -44,12 +48,13 @@ This project is designed for **development, learning, and experimentation** on O
 | NGINX Ingress LB | Public (OCI 10Mbps) | Single entry point; forwards to ClusterIP services |
 | Paperclip Service | ClusterIP | Internal only, accessed through NGINX Ingress |
 | OpenClaw Service | ClusterIP | Internal only |
+| OpenCode Service | ClusterIP | Internal only, accessed through NGINX Ingress |
 
 ### Risks
 
 - **Control plane open to the internet** — `control_plane_allowed_cidrs = ["0.0.0.0/0"]` allows API server access from any IP. Acceptable for development; dangerous for production.
 - **No NetworkPolicies enforced** — While Paperclip's CRD enables `networkPolicy: true`, cluster-wide network policies are not defined.
-- **No default TLS** — Without a custom domain configured, Paperclip serves over HTTP. TLS is available via cert-manager + Let's Encrypt when `paperclip_custom_domain` and `letsencrypt_email` are set.
+- **No default TLS** — Without a custom domain configured, Paperclip and OpenCode serve over HTTP. TLS is available via cert-manager + Let's Encrypt when `paperclip_custom_domain` / `opencode_custom_domain` and `letsencrypt_email` are set.
 - **NGINX Ingress is the single entry point** — A compromise of the ingress controller could expose all internal services.
 <!-- END managed:security-network -->
 
@@ -68,6 +73,7 @@ This project is designed for **development, learning, and experimentation** on O
 ### Application Level
 - Paperclip: Users create accounts via the web UI, authenticated by the auto-generated secret.
 - OpenClaw: Telegram bot token for bot access; no additional user auth layer.
+- OpenCode Web: HTTP Basic Auth with auto-generated `OPENCODE_SERVER_PASSWORD`; username is `opencode`.
 <!-- END managed:security-auth -->
 
 <!-- BEGIN managed:security-production-checklist -->
@@ -81,6 +87,7 @@ Complete these items before exposing the cluster to real workloads or users.
 - [ ] **Private worker nodes** — Set `oci_public_workers = false` to place nodes behind NAT.
 - [ ] **Private control plane** — Set `control_plane_is_public = false` (requires VPN or bastion).
 - [ ] **TLS for Paperclip** — Set `paperclip_custom_domain` and `letsencrypt_email` in `terraform.tfvars` to enable cert-manager + Let's Encrypt TLS (built-in, just needs configuration).
+- [ ] **TLS for OpenCode** — Set `opencode_custom_domain` and `letsencrypt_email` in `terraform.tfvars` to enable HTTPS for OpenCode Web.
 - [ ] **Network policies** — Define cluster-wide NetworkPolicies to restrict pod-to-pod traffic.
 
 ### Secrets
@@ -126,12 +133,20 @@ If credentials are compromised:
 1. **OCI CLI credentials** — Rotate the API signing key in OCI Console → Identity → Users → API Keys.
 2. **LLM API keys** — Rotate immediately at the provider (Anthropic, OpenAI, OpenRouter). Update `terraform.tfvars` and run `terraform apply`.
 3. **Telegram bot token** — Revoke via @BotFather and generate a new token. Update `terraform.tfvars` and run `terraform apply`.
-4. **`BETTER_AUTH_SECRET`** — If the Terraform state is compromised, regenerate by tainting the random_password resource:
+4. **GitHub PAT** — Revoke at https://github.com/settings/tokens. Generate a new token with equivalent scopes. Update `terraform.tfvars` and run `terraform apply`.
+5. **GCP service account key** — Delete the key in GCP Console → IAM & Admin → Service Accounts → opencode. Create a new key and update `terraform.tfvars`.
+6. **`BETTER_AUTH_SECRET`** — If the Terraform state is compromised, regenerate by tainting:
    ```bash
    terraform taint random_password.paperclip_auth[0]
    terraform apply
    ```
    This invalidates all existing Paperclip user sessions.
+7. **`OPENCODE_SERVER_PASSWORD`** — If compromised, regenerate by tainting:
+   ```bash
+   terraform taint random_password.opencode_admin[0]
+   terraform apply
+   ```
+   This invalidates existing OpenCode Web sessions.
 <!-- END managed:security-incident-response -->
 
 <!-- BEGIN managed:security-related-docs -->

@@ -1,5 +1,5 @@
 # =============================================================================
-# OKE Cluster with Paperclip + OpenClaw — Example Terraform Variables
+# OKE Cluster with Paperclip + OpenClaw + OpenCode Web — Example Terraform Variables
 # Copy this file to terraform.tfvars and fill in your values:
 #   cp terraform.tfvars.example terraform.tfvars
 # =============================================================================
@@ -51,6 +51,28 @@ paperclip_exposure          = "public"  # "public" = LoadBalancer, "private" = C
 # openai_api_key    = "sk-..."
 # openrouter_api_key = "sk-or-v1-..."  # Enables OpenRouter (Pi, Hermes, OpenCode, etc.)
 # ollama_cloud_api_key = "sk-oll-..."   # Enables Ollama Cloud models
+
+# --- OpenCode Web (Agent Interface) ---
+# OpenCode Web is deployed directly from the upstream ARM64 release tarball
+enable_opencode = true
+opencode_exposure = "public"  # "public" = Ingress + NGINX, "private" = ClusterIP only
+# opencode_custom_domain = "opencode.example.com"  # Enables HTTPS + Let's Encrypt
+# opencode_path_prefix   = "/opencode"  # Ingress path prefix when using custom domain or IP fallback
+# opencode_version       = "1.17.11"    # Upstream version to build from tarball
+# opencode_storage_size  = "5Gi"
+# opencode_cpu_limit     = "500m"
+# opencode_memory_limit  = "1Gi"
+# External registry credentials (GHCR, Docker Hub, etc.)
+# opencode_registry            = "ghcr"  # or "dockerhub"
+# opencode_registry_username = "your-username"
+# opencode_registry_token  = "ghp_... or dckr_pat_..."  # Personal access token with write:packages scope
+# opencode_registry_namespace = "your-namespace"
+
+# LLM API Keys (optional — reuses Paperclip keys if set; set only if you want different credentials)
+# anthropic_api_key    = "sk-ant-..."
+# openai_api_key       = "sk-..."
+# openrouter_api_key   = "sk-or-v1-..."
+# ollama_cloud_api_key = "sk-oll-..."
 
 # --- OpenClaw (Agent Runtime) ---
 # OpenClaw is deployed via the openclaw-operator Helm chart

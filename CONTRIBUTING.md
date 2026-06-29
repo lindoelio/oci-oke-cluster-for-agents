@@ -3,7 +3,7 @@
 <!-- BEGIN managed:contributing-overview -->
 ## Overview
 
-This project deploys an OCI Free Tier OKE cluster with Paperclip and OpenClaw. Contributions should preserve the Free Tier resource budget and the single-command deployment model.
+This project deploys an OCI Free Tier OKE cluster with Paperclip, OpenClaw, and OpenCode Web. Contributions should preserve the Free Tier resource budget and the single-command deployment model.
 <!-- END managed:contributing-overview -->
 
 <!-- BEGIN managed:contributing-workflow -->
@@ -44,6 +44,7 @@ Include a body when the *why* is non-obvious. Reference the problem being solved
 - [OCI CLI](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm) configured with valid credentials
 - [Python 3](https://www.python.org/) (for external data source scripts)
 - [kubectl](https://kubernetes.io/docs/tasks-tools/) for cluster management
+- [Docker](https://docs.docker.com/engine/install/) for building and pushing images (e.g., OpenCode Web)
 
 ### Local Configuration
 
@@ -76,8 +77,9 @@ For operator-based workloads, follow this pattern:
    - Secrets (`kubectl_manifest` with `stringData`)
    - Instance CRD (`kubectl_manifest`)
 
-For direct deployments (no operator), follow the `paperclip.tf` pattern:
-   - Namespace, secrets, Deployment/StatefulSet, Service
+For direct deployments (no operator), follow the `paperclip.tf` or `opencode.tf` pattern:
+   - Namespace, secrets, Deployment/StatefulSet, Service, Ingress
+   - For Docker-built images (like OpenCode), also include `docker_image` + `docker_registry_image` resources
 
 For infrastructure components (ingress, TLS, monitoring), follow these patterns:
    - `ingress.tf` — NGINX Ingress Controller Helm release, wait-for-LB time_sleep, Ingress resource, IP detection data source

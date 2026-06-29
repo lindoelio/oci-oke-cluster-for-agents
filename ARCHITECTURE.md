@@ -3,7 +3,7 @@
 <!-- BEGIN managed:architecture-overview -->
 ## Overview
 
-This project provisions an OCI Free Tier Kubernetes cluster (OKE) with two AI agent workloads — Paperclip (direct deployment) and OpenClaw (via operator). All infrastructure is managed by Terraform and contained within a child OCI compartment.
+This project provisions an OCI Free Tier Kubernetes cluster (OKE) with three AI agent workloads — Paperclip (direct deployment), OpenClaw (via operator), and OpenCode Web (Docker-built from upstream ARM64 release). All infrastructure is managed by Terraform and contained within a child OCI compartment.
 
 **Design priorities:** Simplicity, cost-effectiveness (Free Tier), and single-command deployment.
 <!-- END managed:architecture-overview -->
@@ -33,10 +33,15 @@ This project provisions an OCI Free Tier Kubernetes cluster (OKE) with two AI ag
 │  │  │    ├─ PostgreSQL StatefulSet     (Helm, v0.34.5)       │  │   │
 │  │  │    ├─ Ingress (NGINX, :80)                             │  │   │
 │  │  │    └─ TLS (cert-manager)                               │  │   │
-│  │  │                             openclaw/                  │  │   │
-│  │  │                               ├─ OpenClawInstance CRD  │  │   │
-│  │  │                               └─ ClusterIP (:18789)    │  │   │
-│  │  └────────────────────────────────────────────────────────┘  │   │
+  │  │  │                             openclaw/                  │  │   │
+  │  │  │                               ├─ OpenClawInstance CRD  │  │   │
+  │  │  │                               └─ ClusterIP (:18789)    │  │   │
+  │  │  │                                                        │  │   │
+  │  │  │  opencode/                                             │  │   │
+  │  │  │    ├─ OpenCode Deployment                               │  │   │
+  │  │  │    ├─ OpenCode PVC (oci-bv, 5Gi)                      │  │   │
+  │  │  │    └─ Ingress (NGINX)                                 │  │   │
+  │  │  └────────────────────────────────────────────────────────┘  │   │
 │  │                                                               │   │
 │  │  ┌── VCN (public subnets, internet gateway) ──────────────┐  │   │
 │  │  └────────────────────────────────────────────────────────┘  │   │
@@ -94,6 +99,18 @@ This project provisions an OCI Free Tier Kubernetes cluster (OKE) with two AI ag
 - **Storage:** PVC with `oci-bv` storage class
 - **Integration:** Optional Telegram bot via secret injection
 - **Gateway/Observability sidecars:** Disabled to avoid CRI-O short-name issues
+
+#### OpenCode Web (Agent Interface)
+- **Deployment:** Direct Kubernetes Deployment from a Docker-built image (no operator — no Helm chart exists)
+- **Image:** Built from the official `anomalyco/opencode` ARM64 release tarball via `src/scripts/opencode.Dockerfile`, pushed to an external registry (GHCR or Docker Hub)
+- **Registry:** External (Docker Hub or GHCR) — no in-cluster registry exists
+- **Exposure:** ClusterIP service (port 80 → 4096) behind NGINX Ingress, with optional cert-manager TLS for custom domains
+- **Auth:** HTTP Basic Auth with auto-generated `OPENCODE_SERVER_PASSWORD` from `random_password`, username `opencode`
+- **LLM Keys:** Injected from `opencode-llm-keys` secret, reusing existing Paperclip variables (Anthropic, OpenAI, OpenRouter, Ollama)
+- **Storage:** 5Gi PVC with `oci-bv` storage class mounted at `/home/opencode/.local/share/opencode`
+- **Developer Tools:** Full Debian-based image with bash, git, gh CLI, gcloud, firebase, Node.js 24 LTS, Python 3.12.13, npm, pnpm
+- **Developer Credentials:** GitHub PAT and GCP service account key injected via `opencode-dev-credentials` secret
+- **Probes:** TCP socket health checks on port 4096 (HTTP probes incompatible with Basic Auth)
 <!-- END managed:architecture-components -->
 
 <!-- BEGIN managed:architecture-deployment-flow -->
@@ -113,21 +130,24 @@ OKE Module (VCN + Cluster + Nodes)
   → time_sleep.after_cluster (60s)
   → data.oci_containerengine_cluster_kube_config
   → data.external.oke_token (Python: token generation)
-  → Provider configuration (kubectl, helm)
+  → Provider configuration (kubectl, helm, docker)
     → kubectl_manifest.crio_shortname_fix (DaemonSet)
+    → docker_image.opencode + docker_registry_image.opencode (Docker build + external registry push)
     → helm_release.nginx_ingress ──┐
     → helm_release.cert_manager ───┤
-                                   ↓
-                          time_sleep.wait_for_ingress_lb (120s)
-                                   ↓
-                          data.external.ingress_ip (Python: IP detection)
-                                   ↓
-    → kubectl_manifest.paperclip_* ──────┐
-    → helm_release.openclaw_operator ────┤
-                                          ↓
-                                 time_sleep (30s)
-                                          ↓
-                                 kubectl_manifest.openclaw_* (namespace, secrets, CRD)
+                                    ↓
+                           time_sleep.wait_for_ingress_lb (120s)
+                                    ↓
+                           data.external.ingress_ip (Python: IP detection)
+                                    ↓
+     → kubectl_manifest.paperclip_* ──────┐
+     → helm_release.openclaw_operator ────┤
+                                           ↓
+                                  time_sleep (30s)
+                                           ↓
+                                  kubectl_manifest.openclaw_* (namespace, secrets, CRD)
+                                    ↓
+     → kubectl_manifest.opencode_* (namespace, secrets, PVC, deployment, service, ingress)
 ```
 <!-- END managed:architecture-deployment-flow -->
 
@@ -147,6 +167,7 @@ OKE Module (VCN + Cluster + Nodes)
 | `hashicorp/cloudinit` | 2.3.7 | Required by OKE module |
 | `hashicorp/local` | 2.8.0 | Required by OKE module |
 | `hashicorp/null` | 3.2.4 | Required by OKE module |
+| `kreuzwerker/docker` | 4.5.0 | Docker image build + external registry push for OpenCode |
 
 ### Critical Design Decisions
 
@@ -188,8 +209,9 @@ Terraform variables (sensitive)
 | cert-manager | ~30m | ~128Mi | — |
 | Paperclip + PostgreSQL | ~750m | ~1Gi | 15Gi |
 | OpenClaw | ~250m | ~512Mi | 5Gi |
+| OpenCode + OpenCode PVC | ~500m | ~1Gi | 5Gi |
 | CRI-O fix DaemonSet | ~4m | ~32Mi | — |
-| **Total Used** | **~1.1Gi** | **~1.8Gi** | **~20Gi** |
+| **Total Used** | **~1.58** | **~2.8Gi** | **~25Gi** |
 | **Free Tier Limit** | **4000m** | **24Gi** | **200Gi** |
 <!-- END managed:architecture-resource-budget -->
 

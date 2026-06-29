@@ -268,3 +268,115 @@ variable "openclaw_telegram_owner_id" {
   type        = string
   default     = ""
 }
+
+variable "openclaw_custom_domain" {
+  description = "Custom domain for OpenClaw API access (e.g., 'openclaw.example.com'). Enables HTTPS + Let's Encrypt when set with letsencrypt_email."
+  type        = string
+  default     = ""
+}
+
+### OpenCode (AI Coding Assistant)
+
+variable "enable_opencode" {
+  description = "Deploy OpenCode Web with managed workspace persistence"
+  type        = bool
+  default     = true
+}
+
+variable "opencode_exposure" {
+  description = "OpenCode service exposure: 'public' (Ingress, requires an ingress controller) or 'private' (ClusterIP only)"
+  type        = string
+  default     = "public"
+
+  validation {
+    condition     = contains(["public", "private"], var.opencode_exposure)
+    error_message = "opencode_exposure must be 'public' or 'private'."
+  }
+}
+
+variable "opencode_version" {
+  description = "OpenCode application version (GitHub release tag, e.g., '1.17.11')"
+  type        = string
+  default     = "1.17.11"
+}
+
+variable "opencode_custom_domain" {
+  description = "Custom domain for OpenCode Web (e.g., 'opencode.example.com'). If set, HTTPS + Let's Encrypt is enabled when letsencrypt_email is also set."
+  type        = string
+  default     = ""
+}
+
+variable "opencode_path_prefix" {
+  description = "URL path prefix for OpenCode Web when no custom domain is configured (e.g., '/opencode')"
+  type        = string
+  default     = "/opencode"
+}
+
+variable "opencode_storage_size" {
+  description = "Storage size for OpenCode workspace persistence"
+  type        = string
+  default     = "5Gi"
+}
+
+variable "opencode_cpu_limit" {
+  description = "CPU limit for OpenCode instance"
+  type        = string
+  default     = "500m"
+}
+
+variable "opencode_memory_limit" {
+  description = "Memory limit for OpenCode instance"
+  type        = string
+  default     = "1Gi"
+}
+
+variable "opencode_registry" {
+  description = "Container registry for the built OpenCode image: 'ghcr' (GitHub Container Registry) or 'dockerhub' (Docker Hub)"
+  type        = string
+  default     = "ghcr"
+
+  validation {
+    condition     = contains(["ghcr", "dockerhub"], var.opencode_registry)
+    error_message = "opencode_registry must be 'ghcr' or 'dockerhub'."
+  }
+}
+
+variable "opencode_registry_namespace" {
+  description = "Namespace or organization on the container registry (e.g., your GitHub username or Docker Hub ID)"
+  type        = string
+  default     = ""
+}
+
+variable "opencode_registry_username" {
+  description = "Username for authenticating to the external container registry"
+  type        = string
+  default     = ""
+}
+
+variable "opencode_registry_token" {
+  description = "Personal Access Token (PAT) with 'write:packages' scope for GHCR or equivalent for Docker Hub"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "github_token" {
+  description = "GitHub Personal Access Token (classic) for GitHub CLI authentication in OpenCode. Scopes: repo, workflow."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "gcp_service_account_key" {
+  description = "Google Cloud Platform service account key JSON for gcloud authentication in OpenCode. Download from GCP Console: IAM & Admin > Service Accounts > Keys."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "firebase_token" {
+  description = "Firebase CLI token (optional). Can be generated via 'firebase login:ci'. Reuses GCP service account if empty."
+  type        = string
+  default     = ""
+  sensitive   = true
+}

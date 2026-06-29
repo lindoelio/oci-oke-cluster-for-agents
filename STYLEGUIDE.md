@@ -30,8 +30,10 @@ File responsibilities (one `.tf` per logical concern):
 - `oke.tf` — OKE module + CRI-O fix DaemonSet
 - `paperclip.tf` — Paperclip workload (direct deployment, no operator)
 - `openclaw.tf` — OpenClaw operator + instance
+- `openclaw-ingress.tf` — OpenClaw Ingress resource
+- `opencode.tf` — OpenCode Web workload (Docker-built direct deployment)
 - `cert-manager.tf` — cert-manager Helm release + Let's Encrypt ClusterIssuer
-- `ingress.tf` — NGINX Ingress Controller + Paperclip Ingress
+- `ingress.tf` — NGINX Ingress Controller + shared Ingress resources
 - `variables.tf` — All variables, grouped by component
 - `output.tf` — Outputs + post-deploy instructions
 
@@ -70,6 +72,7 @@ resource "time_sleep" "after_example" {
 - `oci_oke_` — OKE cluster-specific variables
 - `paperclip_` — Paperclip workload variables
 - `openclaw_` — OpenClaw workload variables
+- `opencode_` — OpenCode Web workload variables (version, exposure, storage, registry, etc.)
 - `enable_` — Boolean toggle for conditional deployments
 - `letsencrypt_` — Let's Encrypt / cert-manager variables (email, etc.)
 - `nginx_ingress_` — NGINX Ingress Controller variables (chart version)

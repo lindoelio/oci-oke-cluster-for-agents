@@ -34,6 +34,21 @@ output "project_compartment_name" {
   value       = data.oci_identity_compartment.project.name
 }
 
+output "opencode_admin_password" {
+  description = "Admin password for OpenCode Web HTTP Basic Auth"
+  value       = var.enable_opencode ? random_password.opencode_admin[0].result : null
+  sensitive   = true
+}
+
+output "opencode_public_url" {
+  description = "Current OpenCode Web access URL"
+  value = var.enable_opencode && var.opencode_exposure == "public" ? (
+    var.opencode_custom_domain != "" ? "https://${var.opencode_custom_domain}" : (
+      length(data.external.ingress_ip) > 0 ? "http://${data.external.ingress_ip[0].result["ip"]}${var.opencode_path_prefix}" : null
+    )
+  ) : null
+}
+
 output "paperclip_public_ip" {
   description = "Public IP of the NGINX Ingress LoadBalancer (use this for DNS A records)"
   value       = var.enable_paperclip && var.paperclip_exposure == "public" && length(data.external.ingress_ip) > 0 ? data.external.ingress_ip[0].result["ip"] : null
@@ -77,6 +92,17 @@ output "post_deploy_instructions" {
     "5. OpenClaw:",
     "   - Paste the invite prompt into OpenClaw via Telegram or direct access",
     "   - Agents will appear in Paperclip dashboard",
+    "",
+    "6. OpenCode Web:",
+    "   ${var.enable_opencode && var.opencode_exposure == "public" ? (
+      var.opencode_custom_domain != "" ? "   - OpenCode Web is accessible at: https://${var.opencode_custom_domain}" : (
+        length(data.external.ingress_ip) > 0 ? "   - OpenCode Web is accessible at: http://${data.external.ingress_ip[0].result["ip"]}${var.opencode_path_prefix}" : "   - OpenCode Web public URL is pending (Ingress IP not yet assigned)."
+      )
+    ) : "   - OpenCode Web is not publicly exposed (set opencode_exposure = \"public\" to enable)."}",
+    "   - Password: (run `terraform output -raw opencode_admin_password` to capture it once)",
+    "   - Wait for the pod to be Ready: kubectl get pods -n opencode",
+    "   - OpenCode Web auto-starts the `opencode web` server on first boot.",
+    "   - When `opencode_custom_domain` is set but `letsencrypt_email` is empty, OpenCode serves over HTTP (no TLS). Set `letsencrypt_email` to enable Let's Encrypt for the custom domain.",
   ])
 }
 

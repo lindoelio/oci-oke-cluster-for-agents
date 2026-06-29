@@ -8,7 +8,7 @@
 ################################################################################
 
 resource "helm_release" "cert_manager" {
-  count = var.enable_paperclip && var.paperclip_exposure == "public" ? 1 : 0
+  count = (var.enable_paperclip && var.paperclip_exposure == "public") || (var.enable_opencode && var.opencode_exposure == "public") ? 1 : 0
 
   depends_on = [module.oke, time_sleep.after_cluster]
 
@@ -32,7 +32,7 @@ resource "helm_release" "cert_manager" {
 ################################################################################
 
 resource "time_sleep" "wait_for_cert_manager" {
-  count = var.enable_paperclip && var.paperclip_exposure == "public" ? 1 : 0
+  count = (var.enable_paperclip && var.paperclip_exposure == "public") || (var.enable_opencode && var.opencode_exposure == "public") ? 1 : 0
 
   depends_on      = [helm_release.cert_manager]
   create_duration = "60s"
@@ -43,7 +43,7 @@ resource "time_sleep" "wait_for_cert_manager" {
 ################################################################################
 
 resource "kubectl_manifest" "letsencrypt_issuer" {
-  count = var.enable_paperclip && var.paperclip_exposure == "public" && var.letsencrypt_email != "" ? 1 : 0
+  count = ((var.enable_paperclip && var.paperclip_exposure == "public") || (var.enable_opencode && var.opencode_exposure == "public")) && var.letsencrypt_email != "" ? 1 : 0
 
   depends_on = [time_sleep.wait_for_cert_manager]
 

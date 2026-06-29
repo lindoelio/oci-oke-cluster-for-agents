@@ -127,6 +127,20 @@ kubectl get pods -n openclaw         # OpenClaw pod Running
 kubectl logs -n openclaw -l app.kubernetes.io/name=openclaw --tail=20  # No fatal errors
 ```
 
+### OpenCode Web Smoke Test
+```bash
+kubectl get pods -n opencode          # OpenCode pod Running
+kubectl get pvc -n opencode             # OpenCode PVC Bound
+kubectl get ingress -n opencode         # OpenCode Ingress exists, rules set
+kubectl get svc -n opencode             # OpenCode service is ClusterIP (:80)
+# When exposed publicly:
+curl -s -H "Host: <DOMAIN>" http://<INGRESS_IP>/opencode/ | head -20  # Returns HTML (OpenCode Web UI)
+# Or if no custom domain, access via IP directly via Ingress path
+curl -s http://<INGRESS_IP>/opencode/ | head -20
+# Basic Auth test
+curl -s -u opencode:<PASSWORD> http://<INGRESS_IP>/opencode/ | head -20  # Returns HTML (password = terraform output -raw opencode_admin_password)
+```
+
 ### Operator CRD Verification
 ```bash
 kubectl get crd | grep openclaw      # OpenClaw CRDs registered

@@ -54,7 +54,8 @@ tfplan
 *.tfplan
 
 # Specs
-specs
+.specs
 
 # Scripts (contain generated configs and secrets)
 src/scripts/
+!src/scripts/opencode.Dockerfile

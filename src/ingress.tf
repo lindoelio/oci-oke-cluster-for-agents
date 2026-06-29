@@ -9,7 +9,7 @@
 ################################################################################
 
 resource "helm_release" "nginx_ingress" {
-  count = var.enable_paperclip && var.paperclip_exposure == "public" ? 1 : 0
+  count = (var.enable_paperclip && var.paperclip_exposure == "public") || (var.enable_opencode && var.opencode_exposure == "public") ? 1 : 0
 
   depends_on = [module.oke, time_sleep.after_cluster]
 
@@ -39,7 +39,7 @@ resource "helm_release" "nginx_ingress" {
 ################################################################################
 
 resource "time_sleep" "wait_for_ingress_lb" {
-  count = var.enable_paperclip && var.paperclip_exposure == "public" ? 1 : 0
+  count = (var.enable_paperclip && var.paperclip_exposure == "public") || (var.enable_opencode && var.opencode_exposure == "public") ? 1 : 0
 
   depends_on      = [helm_release.nginx_ingress]
   create_duration = "120s"
@@ -111,7 +111,7 @@ resource "kubectl_manifest" "paperclip_ingress" {
 ################################################################################
 
 data "external" "ingress_ip" {
-  count = var.enable_paperclip && var.paperclip_exposure == "public" ? 1 : 0
+  count = (var.enable_paperclip && var.paperclip_exposure == "public") || (var.enable_opencode && var.opencode_exposure == "public") ? 1 : 0
 
   depends_on = [
     time_sleep.wait_for_ingress_lb,

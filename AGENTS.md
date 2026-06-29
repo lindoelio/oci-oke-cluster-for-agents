@@ -6,8 +6,8 @@
 This document provides context and rules for AI coding agents (Qwen Code, Copilot, Cursor, Codex, etc.) working on this Terraform repository.
 
 **Repository:** `oci-oke-cluster-for-agents`
-**Purpose:** Deploy an OCI Free Tier OKE cluster with Paperclip (AI agent orchestration) and OpenClaw (AI agent runtime) via Kubernetes operators.
-**Stack:** Terraform ≥ 1.14, OCI provider 8.9.0, Helm 3.1.1, kubectl provider 0.1.13, Python 3 (external data sources).
+**Purpose:** Deploy an OCI Free Tier OKE cluster with Paperclip (AI agent orchestration), OpenClaw (AI agent runtime), and OpenCode Web (AI agent interface).
+**Stack:** Terraform ≥ 1.14, OCI provider 8.9.0, Helm 3.1.1, kubectl provider 0.1.13, kreuzwerker/docker 4.5.0, Python 3 (external data sources).
 <!-- END managed:agents-overview -->
 
 <!-- BEGIN managed:agents-repo-structure -->
@@ -19,8 +19,10 @@ This document provides context and rules for AI coding agents (Qwen Code, Copilo
 | `oke.tf` | OKE cluster module invocation + CRI-O short-name fix DaemonSet |
 | `paperclip.tf` | Paperclip Deployment, PostgreSQL StatefulSet, secrets (no operator) |
 | `openclaw.tf` | OpenClaw operator Helm release, OpenClawInstance CRD, secrets |
+| `openclaw-ingress.tf` | OpenClaw Ingress resource (NGINX + TLS) |
+| `opencode.tf` | OpenCode Docker build + registry push, namespace, secrets, PVC, deployment, service, ingress |
 | `cert-manager.tf` | cert-manager Helm release + Let's Encrypt ClusterIssuer |
-| `ingress.tf` | NGINX Ingress Controller + Paperclip Ingress + IP detection data source |
+| `ingress.tf` | NGINX Ingress Controller + shared Ingress resources + IP detection data source |
 | `variables.tf` | All input variable definitions with validation rules |
 | `output.tf` | Terraform outputs and post-deploy instructions |
 | `scripts/` | Onboarding, IP detection, and patching helper scripts (Python + shell) |
@@ -52,7 +54,8 @@ This document provides context and rules for AI coding agents (Qwen Code, Copilo
 - Cluster name: `${var.project_prefix}-oke-cluster`
 - VCN name: `${var.project_prefix}-vcn`
 - Kubernetes resources: `${var.project_prefix}-<app>` (e.g., `myproject-paperclip`)
-- Namespaces: lowercase app name (`paperclip`, `openclaw`) for instances, `<app>-system` for operators
+- Namespaces: lowercase app name (`paperclip`, `openclaw`, `opencode`) for instances, `<app>-system` for operators
+- Docker images: built from `src/scripts/` Dockerfiles, pushed to an external registry (GHCR or Docker Hub) via `kreuzwerker/docker` provider. The `docker_registry_image` resource requires `keep_remotely = true` and `auth_config` credentials.
 
 ### Provider Configuration
 
@@ -145,6 +148,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - **OCI CLI** must be installed and configured (`oci setup config`) — used by `data.external` scripts for cluster discovery and token generation.
 - **Python 3** — required for inline scripts in `main.tf` (`cluster_lookup_script`, `token_script`).
 - **kubectl** — needed for post-deploy verification and kubeconfig setup.
+- **Docker** — required to build and push images when using the `kreuzwerker/docker` provider (e.g., OpenCode).
 <!-- END managed:agents-dependencies -->
 
 <!-- BEGIN managed:agents-common-tasks -->
@@ -162,10 +166,17 @@ cd src && terraform plan -out=tfplan && terraform show tfplan
 
 ### Add a new Kubernetes workload
 1. Create `<workload>.tf` with operator Helm release, `time_sleep`, namespace, secrets, and CRD instance.
-2. Follow the pattern in `paperclip.tf` or `openclaw.tf`.
+2. Follow the pattern in `paperclip.tf` (direct deployment), `openclaw.tf` (operator), or `opencode.tf` (Docker-built direct deployment).
 3. Add toggle variable (`enable_<workload>`) and config variables to `variables.tf`.
 4. Add relevant outputs to `output.tf`.
 5. Update `terraform.tfvars.example`.
+
+### Add a Docker-built workload (like OpenCode)
+1. Create a `Dockerfile` in `src/scripts/` for the workload.
+2. Use `docker_image` + `docker_registry_image` resources with `kreuzwerker/docker` provider.
+3. Push to an external registry (GHCR or Docker Hub) — no in-cluster registry exists.
+4. Add registry credential variables (`<workload>_registry_username`, `<workload>_registry_token`, `<workload>_registry_namespace`).
+5. Use `keep_remotely = true` on `docker_registry_image` and `auth_config` for authentication.
 
 ### Update a provider version
 1. Change the `version` constraint in `src/main.tf`.
@@ -181,5 +192,6 @@ cd src && terraform plan -out=tfplan && terraform show tfplan
 - [SECURITY.md](SECURITY.md) — Security model and hardening checklist
 - [CONTRIBUTING.md](CONTRIBUTING.md) — Contribution workflow and commit conventions
 - [STYLEGUIDE.md](STYLEGUIDE.md) — Terraform formatting and naming rules
+- [TESTING.md](TESTING.md) — Validation and testing strategy
 - [README.md](README.md) — User-facing documentation and quick start
 <!-- END managed:agents-related-docs -->

@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/cloudinit"
       version = "= 2.3.7"
     }
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "= 4.5.0"
+    }
     external = {
       source  = "hashicorp/external"
       version = "= 2.3.5"

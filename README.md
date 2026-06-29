@@ -1,10 +1,10 @@
-# OKE Cluster with Paperclip + OpenClaw
+# OKE Cluster with Paperclip + OpenClaw + OpenCode
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Terraform](https://img.shields.io/badge/Terraform-%3E%3D1.14-623CE4?logo=terraform)](https://www.terraform.io)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-v1.36-326CE5?logo=kubernetes)](https://kubernetes.io)
 
-A single-command Terraform deployment for an OCI Free Tier Kubernetes cluster with **Paperclip** (AI agent orchestration) and **OpenClaw** (AI agent runtime). Batteries included — NGINX Ingress, cert-manager with Let's Encrypt, and managed PostgreSQL, all within the free tier.
+A single-command Terraform deployment for an OCI Free Tier Kubernetes cluster with **Paperclip** (AI agent orchestration), **OpenClaw** (AI agent runtime), and **OpenCode Web** (AI agent interface). Batteries included — NGINX Ingress, cert-manager with Let's Encrypt, and managed PostgreSQL, all within the free tier.
 
 ## Features
 
@@ -13,6 +13,7 @@ A single-command Terraform deployment for an OCI Free Tier Kubernetes cluster wi
 - **Free Tier** — 2x ARM-based `VM.Standard.A1.Flex` nodes (4 OCPUs, 24GB RAM total)
 - **Paperclip** — Agent orchestration UI with managed PostgreSQL (direct deployment, no operator)
 - **OpenClaw** — Agent runtime with Telegram integration, deployed via official operator (v0.34.5)
+- **OpenCode Web** — AI agent interface built from upstream ARM64 release, with HTTP Basic Auth and persistent sessions
 - **NGINX Ingress Controller** — Single OCI LoadBalancer entry point for all HTTP/HTTPS traffic
 - **cert-manager + Let's Encrypt** — Automatic TLS certificates for custom domains
 - **CRI-O Short-Name Fix** — DaemonSet configuring `docker.io` as default registry on all nodes
@@ -46,10 +47,15 @@ A single-command Terraform deployment for an OCI Free Tier Kubernetes cluster wi
 │  │  │  openclaw-system/                                      │  │   │
 │  │  │    └─ openclaw-operator (Helm, v0.34.5)                │  │   │
 │  │  │                                                        │  │   │
-│  │  │  openclaw/                                             │  │   │
-│  │  │    ├─ OpenClawInstance CRD → OpenClaw Runtime          │  │   │
-│  │  │    └─ Service: ClusterIP (:18789)                      │  │   │
-│  │  └────────────────────────────────────────────────────────┘  │   │
+  │  │  │  openclaw/                                             │  │   │
+  │  │  │    ├─ OpenClawInstance CRD → OpenClaw Runtime          │  │   │
+  │  │  │    └─ Service: ClusterIP (:18789)                      │  │   │
+  │  │  │                                                        │  │   │
+  │  │  │  opencode/                                             │  │   │
+  │  │  │    ├─ OpenCode Deployment (:4096)                      │  │   │
+  │  │  │    ├─ OpenCode PVC (oci-bv, 5Gi)                     │  │   │
+  │  │  │    └─ Ingress (NGINX) + optional TLS (cert-manager)   │  │   │
+  │  │  └────────────────────────────────────────────────────────┘  │   │
 │  │                                                               │   │
 │  │  ┌── VCN + Public Subnets (OKE module) ─────────────────────┐  │   │
 │  │  └──────────────────────────────────────────────────────────┘  │   │
@@ -66,8 +72,9 @@ A single-command Terraform deployment for an OCI Free Tier Kubernetes cluster wi
 | cert-manager | ~30m | ~128Mi | — |
 | Paperclip + PostgreSQL | ~750m | ~1Gi | 15Gi (5Gi + 10Gi) |
 | OpenClaw | ~250m | ~512Mi | 5Gi |
+| OpenCode + OpenCode PVC | ~500m | ~1Gi | 5Gi |
 | CRI-O fix DaemonSet | ~4m | ~32Mi | — |
-| **Used** | **~1.1Gi** | **~1.8Gi** | **~20Gi** |
+| **Used** | **~1.58** | **~2.8Gi** | **~25Gi** |
 | **Free Tier Limit** | 4000m | 24Gi | 200Gi |
 
 All components fit comfortably within OCI free tier limits. The OCI Load Balancer (1 free 10Mbps per OKE cluster) is shared by the NGINX Ingress Controller. All images are confirmed ARM64-compatible.
@@ -140,6 +147,18 @@ openclaw_llm_api_key  = "your-api-key-here"
 openclaw_telegram_enabled   = true
 openclaw_telegram_bot_token = "123456:ABC-DEF..."
 
+# OpenCode Web (AI agent interface)
+enable_opencode    = true
+opencode_exposure  = "public"
+# opencode_custom_domain = "opencode.example.com"
+# opencode_path_prefix   = "/opencode"
+# opencode_version       = "1.17.11"
+
+# External registry for OpenCode image (GHCR, Docker Hub, etc.)
+# opencode_registry_username    = "your-username"
+# opencode_registry_token       = "ghp_..."
+# opencode_registry_namespace   = "ghcr.io/your-namespace"
+
 # Custom domain with HTTPS (optional)
 # paperclip_custom_domain = "paperclip.example.com"
 # letsencrypt_email       = "admin@example.com"
@@ -163,7 +182,11 @@ After apply completes, follow the instructions from `terraform output post_deplo
    - Create your admin account
    - Go to Company Settings > Agents > **Generate OpenClaw Invite Prompt**
 4. **Connect OpenClaw** — paste the invite prompt into OpenClaw (via Telegram or direct access). Agents will appear in the Paperclip dashboard.
-5. **(Optional) Set up HTTPS** — if you configured `paperclip_custom_domain` and `letsencrypt_email`, cert-manager automatically provisions a Let's Encrypt certificate
+5. **Open OpenCode Web** — get the URL from `terraform output opencode_public_url` and the password from `terraform output -raw opencode_admin_password`:
+   - Access the OpenCode Web UI in your browser
+   - Log in with username `opencode` and the generated password
+   - The password is printed once in the post-deploy instructions; save it to a password manager
+6. **(Optional) Set up HTTPS** — if you configured `paperclip_custom_domain` and `letsencrypt_email`, cert-manager automatically provisions a Let's Encrypt certificate
 
 ### 4. Verify
 
@@ -173,6 +196,7 @@ kubectl get pods -A
 kubectl get ingress -n paperclip     # Paperclip Ingress with NGINX
 kubectl get svc -n ingress-nginx     # LoadBalancer external IP
 kubectl get pods -n openclaw         # OpenClaw pod running
+kubectl get pods -n opencode         # OpenCode pod running
 kubectl get certificate -n paperclip # TLS cert (if custom domain configured)
 ```
 
@@ -206,6 +230,7 @@ kubectl get certificate -n paperclip # TLS cert (if custom domain configured)
 |---|---|---|
 | `enable_paperclip` | Deploy Paperclip with managed PostgreSQL | `true` |
 | `enable_openclaw` | Deploy OpenClaw operator + instance | `true` |
+| `enable_opencode` | Deploy OpenCode Web (built from upstream tarball) | `true` |
 
 ### Paperclip
 
@@ -244,6 +269,21 @@ kubectl get certificate -n paperclip # TLS cert (if custom domain configured)
 | `openclaw_telegram_bot_token` | Telegram bot token (sensitive) | `""` |
 | `openclaw_telegram_owner_id` | Telegram numeric user ID for auto-approval | `""` |
 
+### OpenCode Web
+
+| Variable | Description | Default |
+|---|---|---|
+| `opencode_exposure` | `"public"` (NGINX Ingress) or `"private"` (ClusterIP only) | `"public"` |
+| `opencode_custom_domain` | Custom domain for HTTPS + Let's Encrypt | `""` |
+| `opencode_path_prefix` | Ingress path prefix (e.g. `/opencode`) | `"/opencode"` |
+| `opencode_version` | Upstream version to build from tarball | `"1.17.11"` |
+| `opencode_storage_size` | Data persistence PVC size | `"5Gi"` |
+| `opencode_cpu_limit` | CPU limit | `"500m"` |
+| `opencode_memory_limit` | Memory limit | `"1Gi"` |
+| `opencode_registry_username` | External registry username (sensitive) | `""` |
+| `opencode_registry_token` | External registry token (sensitive) | `""` |
+| `opencode_registry_namespace` | External registry namespace | `""` |
+
 ## Project Structure
 
 ```
@@ -263,14 +303,16 @@ kubectl get certificate -n paperclip # TLS cert (if custom domain configured)
     ├── oke.tf                      # OKE module + CRI-O fix DaemonSet
     ├── paperclip.tf                # Paperclip Deployment + PostgreSQL StatefulSet
     ├── openclaw.tf                 # OpenClaw operator + OpenClawInstance CRD
+    ├── opencode.tf               # OpenCode Web deployment + Docker build + registry push
     ├── cert-manager.tf             # cert-manager Helm release + Let's Encrypt ClusterIssuer
-    ├── ingress.tf                  # NGINX Ingress Controller + Paperclip Ingress
+    ├── ingress.tf                  # NGINX Ingress Controller + shared Ingress resources
     ├── variables.tf                # All variable definitions
     ├── output.tf                   # Terraform outputs + post-deploy instructions
-    ├── scripts/                    # Onboarding, IP detection, and patching helpers
+    ├── scripts/                    # Onboarding, IP detection, patching helpers, and Dockerfiles
     │   ├── paperclip_onboard.sh
     │   ├── detect_ingress_ip.py
-    │   └── patch_paperclip.py
+    │   ├── patch_paperclip.py
+    │   └── opencode.Dockerfile
     └── terraform.tfvars.example    # Example configuration (copy to terraform.tfvars)
 ```
 
@@ -287,6 +329,7 @@ kubectl get certificate -n paperclip # TLS cert (if custom domain configured)
 | `hashicorp/cloudinit` | 2.3.7 |
 | `hashicorp/local` | 2.8.0 |
 | `hashicorp/null` | 3.2.4 |
+| `kreuzwerker/docker` | 4.5.0 |
 
 > **Note**: The `hashicorp/kubernetes` provider is intentionally excluded — it hangs on K8s 1.36.x. All Kubernetes resources use `hashicorp-oss/kubectl` instead.
 

@@ -216,7 +216,7 @@ resource "kubectl_manifest" "opencode_deployment" {
             {
               name            = "opencode"
               image           = docker_image.opencode[count.index].name
-              imagePullPolicy = "Always"
+              imagePullPolicy = "IfNotPresent"
               ports = [
                 {
                   containerPort = 4096
@@ -351,7 +351,7 @@ resource "kubectl_manifest" "opencode_deployment" {
               volumeMounts = [
                 {
                   name      = "opencode-data"
-                  mountPath = "/root/.local/share/opencode"
+                  mountPath = "/home/opencode/.local/share/opencode"
                 }
               ]
             }
@@ -364,6 +364,27 @@ resource "kubectl_manifest" "opencode_deployment" {
               }
             }
           ]
+          affinity = {
+            podAntiAffinity = {
+              preferredDuringSchedulingIgnoredDuringExecution = [
+                {
+                  weight = 100
+                  podAffinityTerm = {
+                    labelSelector = {
+                      matchExpressions = [
+                        {
+                          key      = "app"
+                          operator = "In"
+                          values   = ["paperclip", "paperclip-db"]
+                        }
+                      ]
+                    }
+                    topologyKey = "kubernetes.io/hostname"
+                  }
+                }
+              ]
+            }
+          }
         }
       }
     }

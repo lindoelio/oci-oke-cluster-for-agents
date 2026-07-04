@@ -43,7 +43,7 @@ paperclip_exposure          = "public"  # "public" = LoadBalancer, "private" = C
 # paperclip_db_storage_size  = "10Gi"
 # paperclip_storage_size     = "5Gi"
 # paperclip_cpu_limit        = "1000m"
-# paperclip_memory_limit     = "2Gi"
+# paperclip_memory_limit     = "4Gi"
 
 # LLM API Keys (at least one required for Paperclip agents)
 # All keys are optional — Paperclip will use whichever providers are configured
@@ -58,10 +58,10 @@ enable_opencode = true
 opencode_exposure = "public"  # "public" = Ingress + NGINX, "private" = ClusterIP only
 # opencode_custom_domain = "opencode.example.com"  # Enables HTTPS + Let's Encrypt
 # opencode_path_prefix   = "/opencode"  # Ingress path prefix when using custom domain or IP fallback
-# opencode_version       = "1.17.11"    # Upstream version to build from tarball
+# opencode_version       = "1.17.13"    # Upstream version to build from tarball
 # opencode_storage_size  = "5Gi"
 # opencode_cpu_limit     = "500m"
-# opencode_memory_limit  = "1Gi"
+# opencode_memory_limit  = "8Gi"
 # External registry credentials (GHCR, Docker Hub, etc.)
 # opencode_registry            = "ghcr"  # or "dockerhub"
 # opencode_registry_username = "your-username"
@@ -76,7 +76,7 @@ opencode_exposure = "public"  # "public" = Ingress + NGINX, "private" = ClusterI
 
 # --- OpenClaw (Agent Runtime) ---
 # OpenClaw is deployed via the openclaw-operator Helm chart
-# openclaw_chart_version     = "0.34.5"
+# openclaw_chart_version     = "0.36.5"
 # openclaw_image_repository  = "ghcr.io/openclaw/openclaw"
 # openclaw_image_tag         = "latest"
 openclaw_llm_provider    = "openrouter"
@@ -84,7 +84,7 @@ openclaw_llm_model       = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
 openclaw_llm_api_key     = "your-llm-api-key-here"
 # openclaw_storage_size    = "5Gi"
 # openclaw_cpu_limit       = "500m"
-# openclaw_memory_limit    = "1Gi"
+# openclaw_memory_limit    = "2Gi"
 
 # Telegram integration (optional)
 openclaw_telegram_enabled   = true

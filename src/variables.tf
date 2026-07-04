@@ -150,7 +150,7 @@ variable "paperclip_cpu_limit" {
 variable "paperclip_memory_limit" {
   description = "Memory limit for Paperclip instance"
   type        = string
-  default     = "2Gi"
+  default     = "4Gi"
 }
 
 variable "ollama_cloud_api_key" {
@@ -198,7 +198,7 @@ variable "enable_openclaw" {
 variable "openclaw_chart_version" {
   description = "OpenClaw operator Helm chart version (oci://ghcr.io/paperclipinc/charts/openclaw-operator)"
   type        = string
-  default     = "0.34.5"
+  default     = "0.36.5"
 }
 
 variable "openclaw_image_repository" {
@@ -247,7 +247,7 @@ variable "openclaw_cpu_limit" {
 variable "openclaw_memory_limit" {
   description = "Memory limit for OpenClaw instance"
   type        = string
-  default     = "1Gi"
+  default     = "2Gi"
 }
 
 variable "openclaw_telegram_enabled" {
@@ -297,7 +297,7 @@ variable "opencode_exposure" {
 variable "opencode_version" {
   description = "OpenCode application version (GitHub release tag, e.g., '1.17.11')"
   type        = string
-  default     = "1.17.11"
+  default     = "1.17.13"
 }
 
 variable "opencode_custom_domain" {
@@ -327,7 +327,7 @@ variable "opencode_cpu_limit" {
 variable "opencode_memory_limit" {
   description = "Memory limit for OpenCode instance"
   type        = string
-  default     = "1Gi"
+  default     = "8Gi"
 }
 
 variable "opencode_registry" {

@@ -32,9 +32,8 @@ RUN curl -fsSL \
 # Final stage — Full developer environment
 ################################################################################
 
-FROM --platform=linux/arm64 python:3.12.13-slim
+FROM --platform=linux/arm64 ubuntu:24.04
 
-# Install base tools and dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
@@ -47,12 +46,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     zip \
     jq \
+    python3 \
     python3-pip \
     python3-venv \
+    python3-dev \
     build-essential \
-    make \
-    gcc \
-    g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js 24 LTS
@@ -88,7 +86,7 @@ RUN npm install -g firebase-tools
 RUN npm install -g typescript ts-node yarn @angular/cli @nestjs/cli
 
 # Install Python packages commonly used
-RUN pip3 install --no-cache-dir \
+RUN pip3 install --break-system-packages --no-cache-dir \
     requests \
     urllib3 \
     boto3 \

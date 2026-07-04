@@ -203,7 +203,7 @@ resource "kubectl_manifest" "paperclip_db_statefulset" {
                 }
                 limits = {
                   cpu    = "500m"
-                  memory = "512Mi"
+                  memory = "1Gi"
                 }
               }
               livenessProbe = {

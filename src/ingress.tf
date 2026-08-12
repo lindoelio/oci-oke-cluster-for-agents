@@ -26,7 +26,10 @@ resource "helm_release" "nginx_ingress" {
     controller:
       service:
         annotations:
-          service.beta.kubernetes.io/oci-load-balancer-shape: "10Mbps"
+          # Always Free flexible LB (10 Mbps min/max) — the fixed "10Mbps" shape is billable
+          service.beta.kubernetes.io/oci-load-balancer-shape: "flexible"
+          service.beta.kubernetes.io/oci-load-balancer-shape-flex-min: "10"
+          service.beta.kubernetes.io/oci-load-balancer-shape-flex-max: "10"
         type: LoadBalancer
       publishService:
         enabled: true

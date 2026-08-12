@@ -100,6 +100,24 @@ variable "paperclip_image_tag" {
   default     = "latest"
 }
 
+variable "enable_paperclip_qmd" {
+  description = "Provision qmd (local BM25 + vector + rerank search for agent memory recall) onto the Paperclip PVC via the qmd-setup initContainer"
+  type        = bool
+  default     = true
+}
+
+variable "paperclip_qmd_version" {
+  description = "Version of the @tobilu/qmd npm package installed on the Paperclip PVC"
+  type        = string
+  default     = "2.5.3"
+}
+
+variable "paperclip_qmd_installer_image" {
+  description = "Image used by the qmd-setup initContainer to install qmd; must be glibc-based Debian with the same Node major as the Paperclip image so native prebuilds apply"
+  type        = string
+  default     = "docker.io/library/node:24-slim"
+}
+
 variable "paperclip_exposure" {
   description = "Paperclip service exposure: 'public' (LoadBalancer) or 'private' (ClusterIP)"
   type        = string
@@ -151,6 +169,12 @@ variable "paperclip_memory_limit" {
   description = "Memory limit for Paperclip instance"
   type        = string
   default     = "4Gi"
+}
+
+variable "paperclip_cheap_model" {
+  description = "Fallback/budget-lane model for Paperclip's opencode_local adapter (recovery retries). Full provider/model id — any provider the deployment supports (OpenRouter, OpenCode Go, etc.), not tied to one gateway. The adapter's upstream default is an OpenAI model that our gateway does not serve."
+  type        = string
+  default     = "openrouter/nvidia/nemotron-3.5-lightning:free"
 }
 
 variable "ollama_cloud_api_key" {
@@ -331,7 +355,7 @@ variable "opencode_memory_limit" {
 }
 
 variable "opencode_registry" {
-  description = "Container registry for the built OpenCode image: 'ghcr' (GitHub Container Registry) or 'dockerhub' (Docker Hub)"
+  description = "Container registry for the locally built OpenCode image: 'ghcr' (GitHub Container Registry) or 'dockerhub' (Docker Hub)"
   type        = string
   default     = "ghcr"
 
@@ -355,6 +379,13 @@ variable "opencode_registry_username" {
 
 variable "opencode_registry_token" {
   description = "Personal Access Token (PAT) with 'write:packages' scope for GHCR or equivalent for Docker Hub"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "opencode_go_api_key" {
+  description = "OpenCode Go subscription API key (https://opencode.ai/go). When set, registers the built-in 'opencode-go' provider in both OpenCode Web and Paperclip's bundled opencode CLI."
   type        = string
   default     = ""
   sensitive   = true

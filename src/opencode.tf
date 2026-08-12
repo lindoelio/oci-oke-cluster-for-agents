@@ -141,6 +141,32 @@ resource "kubectl_manifest" "opencode_dev_credentials" {
 }
 
 ################################################################################
+# OpenCode Go provider secret (only created when a key is provided)
+################################################################################
+
+resource "kubectl_manifest" "opencode_go_secret" {
+  count = var.enable_opencode && var.opencode_go_api_key != "" ? 1 : 0
+
+  depends_on = [kubectl_manifest.opencode_namespace]
+
+  manifest = {
+    apiVersion = "v1"
+    kind       = "Secret"
+    metadata = {
+      name      = "opencode-go-auth"
+      namespace = "opencode"
+      labels = {
+        managed-by = "terraform"
+      }
+    }
+    type = "Opaque"
+    stringData = {
+      OPENCODE_GO_API_KEY = var.opencode_go_api_key
+    }
+  }
+}
+
+################################################################################
 # OpenCode PersistentVolumeClaim
 ################################################################################
 
@@ -184,6 +210,7 @@ resource "kubectl_manifest" "opencode_deployment" {
     time_sleep.after_opencode_image,
     kubectl_manifest.opencode_auth_secret,
     kubectl_manifest.opencode_llm_keys_secret,
+    kubectl_manifest.opencode_go_secret,
     kubectl_manifest.opencode_pvc,
   ]
 
@@ -212,6 +239,56 @@ resource "kubectl_manifest" "opencode_deployment" {
           }
         }
         spec = {
+          securityContext = {
+            fsGroup = 1000
+          }
+          initContainers = var.opencode_go_api_key != "" ? [
+            {
+              name    = "opencode-go-auth"
+              image   = docker_image.opencode[count.index].name
+              command = ["python3", "-c"]
+              args    = [file("${path.module}/scripts/opencode_go_auth.py")]
+              env = [
+                {
+                  name  = "AUTH_PATH"
+                  value = "/home/opencode/.local/share/opencode/auth.json"
+                },
+                {
+                  name  = "AUTH_UID"
+                  value = "1000"
+                },
+                {
+                  name  = "AUTH_GID"
+                  value = "1000"
+                },
+                {
+                  name = "OPENCODE_GO_API_KEY"
+                  valueFrom = {
+                    secretKeyRef = {
+                      name = "opencode-go-auth"
+                      key  = "OPENCODE_GO_API_KEY"
+                    }
+                  }
+                }
+              ]
+              volumeMounts = [
+                {
+                  name      = "opencode-data"
+                  mountPath = "/home/opencode/.local/share/opencode"
+                }
+              ]
+              resources = {
+                requests = {
+                  cpu    = "10m"
+                  memory = "32Mi"
+                }
+                limits = {
+                  cpu    = "100m"
+                  memory = "128Mi"
+                }
+              }
+            }
+          ] : []
           containers = [
             {
               name            = "opencode"
@@ -237,6 +314,13 @@ resource "kubectl_manifest" "opencode_deployment" {
                   {
                     name  = "OPENCODE_SERVER_USERNAME"
                     value = "opencode"
+                  },
+                  {
+                    # The kubelet creates the volume mount's intermediate dirs as root,
+                    # so the app cannot mkdir ~/.local/state on the container FS.
+                    # Route XDG state into the (fsGroup-writable) data volume instead.
+                    name  = "XDG_STATE_HOME"
+                    value = "/home/opencode/.local/share/opencode/state"
                   }
                 ],
                 var.anthropic_api_key != "" ? [

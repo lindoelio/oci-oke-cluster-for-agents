@@ -36,6 +36,9 @@ enable_openclaw  = true
 # Paperclip is deployed directly (no operator) with a managed PostgreSQL
 # paperclip_image_repository = "ghcr.io/paperclipai/paperclip"
 # paperclip_image_tag        = "latest"
+# enable_paperclip_qmd       = true   # qmd on the PVC via the qmd-setup initContainer (no registry/Docker needed)
+# paperclip_qmd_version      = "2.5.3"
+# paperclip_qmd_installer_image = "docker.io/library/node:24-slim"
 paperclip_exposure          = "public"  # "public" = LoadBalancer, "private" = ClusterIP
 # paperclip_public_url       = ""  # Auto-detected from Ingress LB IP when empty. Set to override.
 # paperclip_custom_domain    = "paperclip.example.com"  # Enables HTTPS + Let's Encrypt
@@ -44,6 +47,7 @@ paperclip_exposure          = "public"  # "public" = LoadBalancer, "private" = C
 # paperclip_storage_size     = "5Gi"
 # paperclip_cpu_limit        = "1000m"
 # paperclip_memory_limit     = "4Gi"
+# paperclip_cheap_model = "openrouter/nvidia/nemotron-3.5-lightning:free"  # opencode_local budget lane (recovery retries); any provider/model
 
 # LLM API Keys (at least one required for Paperclip agents)
 # All keys are optional — Paperclip will use whichever providers are configured

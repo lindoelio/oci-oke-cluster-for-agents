@@ -3,6 +3,11 @@
 # Deploys Paperclip directly (no operator) with a managed PostgreSQL sidecar.
 # Image: ghcr.io/paperclipai/paperclip (ARM64 confirmed)
 #
+# qmd (local BM25 + vector + rerank search for agent memory recall) is
+# provisioned by the qmd-setup initContainer onto the paperclip-data PVC
+# (/paperclip/.qmd), version-stamped and idempotent — no custom image build
+# or registry push required.
+#
 # Automated onboarding: an initContainer runs `paperclipai onboard` on first start
 # and patches config.json for public internet access.
 ################################################################################
@@ -120,6 +125,34 @@ resource "kubectl_manifest" "paperclip_api_keys_secret" {
 }
 
 ################################################################################
+# OpenCode Go provider secret (only created when a key is provided)
+# Consumed by the opencode-go-auth initContainer to register the provider
+# in the opencode CLI bundled with Paperclip.
+################################################################################
+
+resource "kubectl_manifest" "paperclip_opencode_go_secret" {
+  count = var.enable_paperclip && var.opencode_go_api_key != "" ? 1 : 0
+
+  depends_on = [kubectl_manifest.paperclip_namespace]
+
+  manifest = {
+    apiVersion = "v1"
+    kind       = "Secret"
+    metadata = {
+      name      = "opencode-go-auth"
+      namespace = "paperclip"
+      labels = {
+        managed-by = "terraform"
+      }
+    }
+    type = "Opaque"
+    stringData = {
+      OPENCODE_GO_API_KEY = var.opencode_go_api_key
+    }
+  }
+}
+
+################################################################################
 # PostgreSQL StatefulSet
 ################################################################################
 
@@ -198,12 +231,12 @@ resource "kubectl_manifest" "paperclip_db_statefulset" {
               ]
               resources = {
                 requests = {
-                  cpu    = "100m"
-                  memory = "256Mi"
+                  cpu    = "250m"
+                  memory = "512Mi"
                 }
                 limits = {
-                  cpu    = "500m"
-                  memory = "1Gi"
+                  cpu    = "750m"
+                  memory = "2Gi"
                 }
               }
               livenessProbe = {
@@ -287,6 +320,7 @@ resource "kubectl_manifest" "paperclip_deployment" {
   depends_on = [
     kubectl_manifest.paperclip_auth_secret,
     kubectl_manifest.paperclip_api_keys_secret,
+    kubectl_manifest.paperclip_opencode_go_secret,
     kubectl_manifest.paperclip_db_service,
     time_sleep.wait_for_ingress_lb,
     kubectl_manifest.paperclip_ingress,
@@ -320,7 +354,7 @@ resource "kubectl_manifest" "paperclip_deployment" {
           securityContext = {
             fsGroup = 1000
           }
-          initContainers = [
+          initContainers = concat([
             {
               name    = "paperclip-onboard"
               image   = "${var.paperclip_image_repository}:${var.paperclip_image_tag}"
@@ -361,7 +395,98 @@ resource "kubectl_manifest" "paperclip_deployment" {
                 }
               }
             }
-          ]
+            ], var.opencode_go_api_key != "" ? [
+            {
+              name    = "opencode-go-auth"
+              image   = "${var.paperclip_image_repository}:${var.paperclip_image_tag}"
+              command = ["python3", "-c"]
+              args    = [file("${path.module}/scripts/opencode_go_auth.py")]
+              env = [
+                {
+                  name  = "AUTH_PATH"
+                  value = "/paperclip/.local/share/opencode/auth.json"
+                },
+                {
+                  name  = "AUTH_UID"
+                  value = "1000"
+                },
+                {
+                  name  = "AUTH_GID"
+                  value = "1000"
+                },
+                {
+                  name = "OPENCODE_GO_API_KEY"
+                  valueFrom = {
+                    secretKeyRef = {
+                      name = "opencode-go-auth"
+                      key  = "OPENCODE_GO_API_KEY"
+                    }
+                  }
+                }
+              ]
+              volumeMounts = [
+                {
+                  name      = "paperclip-data"
+                  mountPath = "/paperclip"
+                }
+              ]
+              resources = {
+                requests = {
+                  cpu    = "10m"
+                  memory = "32Mi"
+                }
+                limits = {
+                  cpu    = "100m"
+                  memory = "128Mi"
+                }
+              }
+            }
+            ] : [], var.enable_paperclip_qmd ? [
+            {
+              # Provisions qmd onto the PVC once per version (stamp-guarded);
+              # glibc Debian like the app image, so native prebuilds apply.
+              name    = "qmd-setup"
+              image   = var.paperclip_qmd_installer_image
+              command = ["sh", "-c"]
+              args = [
+                <<-EOT
+                set -e
+                if [ "$(cat /paperclip/.qmd/.version 2>/dev/null)" = "${var.paperclip_qmd_version}" ]; then
+                  echo "qmd ${var.paperclip_qmd_version} already installed"
+                  exit 0
+                fi
+                # Build tools for native tree-sitter grammars that compile from source.
+                apt-get update
+                apt-get install -y --no-install-recommends python3 make g++
+                npm_config_cache=/tmp/npm-cache npm install --no-update-notifier --prefix /paperclip/.qmd "@tobilu/qmd@${var.paperclip_qmd_version}"
+                npm exec --prefix /paperclip/.qmd -- qmd --version
+                echo "${var.paperclip_qmd_version}" > /paperclip/.qmd/.version
+                EOT
+              ]
+              env = [
+                {
+                  name  = "SUPPRESS_LABEL_WARNING"
+                  value = "True"
+                }
+              ]
+              volumeMounts = [
+                {
+                  name      = "paperclip-data"
+                  mountPath = "/paperclip"
+                }
+              ]
+              resources = {
+                requests = {
+                  cpu    = "250m"
+                  memory = "512Mi"
+                }
+                limits = {
+                  cpu    = "1000m"
+                  memory = "1Gi"
+                }
+              }
+            }
+          ] : [])
           containers = [
             {
               name  = "paperclip"
@@ -372,7 +497,7 @@ resource "kubectl_manifest" "paperclip_deployment" {
                   name          = "http"
                 }
               ]
-              env = [
+              env = concat([
                 {
                   name  = "PORT"
                   value = "3100"
@@ -478,8 +603,22 @@ resource "kubectl_manifest" "paperclip_deployment" {
                       optional = true
                     }
                   }
+                },
+                {
+                  # Budget lane (recovery retries) of the opencode_local adapter.
+                  # Env name is fixed upstream by the adapter; the VALUE is a full
+                  # provider/model id, free to target any configured provider.
+                  name  = "PAPERCLIP_OPENCODE_CHEAP_MODEL"
+                  value = var.paperclip_cheap_model
                 }
-              ]
+                ], var.enable_paperclip_qmd ? [
+                {
+                  # qmd is installed on the PVC by the qmd-setup initContainer
+                  # (npm --prefix layout: bin lives in node_modules/.bin).
+                  name  = "PATH"
+                  value = "/paperclip/.qmd/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+                }
+              ] : [])
               volumeMounts = [
                 {
                   name      = "paperclip-data"
@@ -488,8 +627,8 @@ resource "kubectl_manifest" "paperclip_deployment" {
               ]
               resources = {
                 requests = {
-                  cpu    = "250m"
-                  memory = "512Mi"
+                  cpu    = "500m"
+                  memory = "1Gi"
                 }
                 limits = {
                   cpu    = var.paperclip_cpu_limit

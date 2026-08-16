@@ -118,6 +118,44 @@ variable "paperclip_qmd_installer_image" {
   default     = "docker.io/library/node:24-slim"
 }
 
+variable "enable_paperclip_firebase_cli" {
+  description = "Provision Firebase CLI onto the Paperclip PVC via the firebase-setup initContainer so agents can run firebase commands"
+  type        = bool
+  default     = true
+}
+
+variable "paperclip_firebase_tools_version" {
+  description = "Version of the firebase-tools npm package installed on the Paperclip PVC"
+  type        = string
+  default     = "15.26.0"
+}
+
+variable "enable_metrics_server" {
+  description = "Deploy metrics-server (kubectl top, resource visibility) into kube-system"
+  type        = bool
+  default     = true
+}
+
+variable "metrics_server_chart_version" {
+  description = "Helm chart version of metrics-server"
+  type        = string
+  default     = "3.13.1"
+}
+
+variable "alibaba_token_plan_api_key" {
+  description = "Alibaba Token Plan (International, ap-southeast-1) API key seeded as a company secret for the primary company; consumed by the built-in opencode 'alibaba-token-plan' provider via ALIBABA_TOKEN_PLAN_API_KEY. Company mapping lives in the git-ignored seeding script/spec"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "alibaba_token_plan_api_key_secondary" {
+  description = "Optional independent Alibaba Token Plan API key copy for a second company (rotatable per company); empty disables seeding for that company"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "paperclip_exposure" {
   description = "Paperclip service exposure: 'public' (LoadBalancer) or 'private' (ClusterIP)"
   type        = string

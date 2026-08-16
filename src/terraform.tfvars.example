@@ -56,6 +56,13 @@ paperclip_exposure          = "public"  # "public" = LoadBalancer, "private" = C
 # openrouter_api_key = "sk-or-v1-..."  # Enables OpenRouter (Pi, Hermes, OpenCode, etc.)
 # ollama_cloud_api_key = "sk-oll-..."   # Enables Ollama Cloud models
 
+# Developer credentials (injected into Paperclip and OpenCode Web agent envs)
+# github_token = "ghp_..."               # GitHub PAT (scopes: repo, workflow) for gh CLI
+# gcp_service_account_key = <<EOT        # GCP service account key JSON for gcloud
+# { "type": "service_account", ... }
+# EOT
+# firebase_token = "1//..."              # Firebase CLI token (firebase login:ci)
+
 # --- OpenCode Web (Agent Interface) ---
 # OpenCode Web is deployed directly from the upstream ARM64 release tarball
 enable_opencode = true

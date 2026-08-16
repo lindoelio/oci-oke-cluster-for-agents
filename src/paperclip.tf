@@ -96,62 +96,6 @@ resource "kubectl_manifest" "paperclip_db_secret" {
   }
 }
 
-resource "kubectl_manifest" "paperclip_api_keys_secret" {
-  count = var.enable_paperclip ? 1 : 0
-
-  depends_on = [kubectl_manifest.paperclip_namespace]
-
-  manifest = {
-    apiVersion = "v1"
-    kind       = "Secret"
-    metadata = {
-      name      = "paperclip-api-keys"
-      namespace = "paperclip"
-    }
-    type = "Opaque"
-    stringData = merge(
-      var.anthropic_api_key != "" ? { ANTHROPIC_API_KEY = var.anthropic_api_key } : {},
-      var.openai_api_key != "" ? { OPENAI_API_KEY = var.openai_api_key } : {},
-      var.openrouter_api_key != "" ? {
-        OPENROUTER_API_KEY  = var.openrouter_api_key
-        OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-      } : {},
-      var.ollama_cloud_api_key != "" ? {
-        OLLAMA_CLOUD_API_KEY = var.ollama_cloud_api_key
-        OLLAMA_BASE_URL      = "https://api.ollama.com"
-      } : {},
-    )
-  }
-}
-
-################################################################################
-# OpenCode Go provider secret (only created when a key is provided)
-# Consumed by the opencode-go-auth initContainer to register the provider
-# in the opencode CLI bundled with Paperclip.
-################################################################################
-
-resource "kubectl_manifest" "paperclip_opencode_go_secret" {
-  count = var.enable_paperclip && var.opencode_go_api_key != "" ? 1 : 0
-
-  depends_on = [kubectl_manifest.paperclip_namespace]
-
-  manifest = {
-    apiVersion = "v1"
-    kind       = "Secret"
-    metadata = {
-      name      = "opencode-go-auth"
-      namespace = "paperclip"
-      labels = {
-        managed-by = "terraform"
-      }
-    }
-    type = "Opaque"
-    stringData = {
-      OPENCODE_GO_API_KEY = var.opencode_go_api_key
-    }
-  }
-}
-
 ################################################################################
 # PostgreSQL StatefulSet
 ################################################################################
@@ -319,8 +263,6 @@ resource "kubectl_manifest" "paperclip_deployment" {
 
   depends_on = [
     kubectl_manifest.paperclip_auth_secret,
-    kubectl_manifest.paperclip_api_keys_secret,
-    kubectl_manifest.paperclip_opencode_go_secret,
     kubectl_manifest.paperclip_db_service,
     time_sleep.wait_for_ingress_lb,
     kubectl_manifest.paperclip_ingress,
@@ -395,16 +337,23 @@ resource "kubectl_manifest" "paperclip_deployment" {
                 }
               }
             }
-            ], var.opencode_go_api_key != "" ? [
+            ], [
             {
-              name    = "opencode-go-auth"
+              # Writes per-company opencode auth.json homes by decrypting the
+              # opencode_go_api_key company secrets (local_encrypted) from the
+              # DB; replaces the old cluster-global auth.json.
+              name    = "company-auth-writer"
               image   = "${var.paperclip_image_repository}:${var.paperclip_image_tag}"
-              command = ["python3", "-c"]
-              args    = [file("${path.module}/scripts/opencode_go_auth.py")]
+              command = ["node", "-e", file("${path.module}/scripts/company_auth_writer.js")]
               env = [
                 {
-                  name  = "AUTH_PATH"
-                  value = "/paperclip/.local/share/opencode/auth.json"
+                  name = "DATABASE_URL"
+                  valueFrom = {
+                    secretKeyRef = {
+                      name = "paperclip-db"
+                      key  = "DATABASE_URL"
+                    }
+                  }
                 },
                 {
                   name  = "AUTH_UID"
@@ -415,13 +364,8 @@ resource "kubectl_manifest" "paperclip_deployment" {
                   value = "1000"
                 },
                 {
-                  name = "OPENCODE_GO_API_KEY"
-                  valueFrom = {
-                    secretKeyRef = {
-                      name = "opencode-go-auth"
-                      key  = "OPENCODE_GO_API_KEY"
-                    }
-                  }
+                  name  = "SUPPRESS_LABEL_WARNING"
+                  value = "True"
                 }
               ]
               volumeMounts = [
@@ -433,15 +377,15 @@ resource "kubectl_manifest" "paperclip_deployment" {
               resources = {
                 requests = {
                   cpu    = "10m"
-                  memory = "32Mi"
+                  memory = "64Mi"
                 }
                 limits = {
-                  cpu    = "100m"
-                  memory = "128Mi"
+                  cpu    = "200m"
+                  memory = "256Mi"
                 }
               }
             }
-            ] : [], var.enable_paperclip_qmd ? [
+            ], var.enable_paperclip_qmd ? [
             {
               # Provisions qmd onto the PVC once per version (stamp-guarded);
               # glibc Debian like the app image, so native prebuilds apply.
@@ -461,6 +405,48 @@ resource "kubectl_manifest" "paperclip_deployment" {
                 npm_config_cache=/tmp/npm-cache npm install --no-update-notifier --prefix /paperclip/.qmd "@tobilu/qmd@${var.paperclip_qmd_version}"
                 npm exec --prefix /paperclip/.qmd -- qmd --version
                 echo "${var.paperclip_qmd_version}" > /paperclip/.qmd/.version
+                EOT
+              ]
+              env = [
+                {
+                  name  = "SUPPRESS_LABEL_WARNING"
+                  value = "True"
+                }
+              ]
+              volumeMounts = [
+                {
+                  name      = "paperclip-data"
+                  mountPath = "/paperclip"
+                }
+              ]
+              resources = {
+                requests = {
+                  cpu    = "250m"
+                  memory = "512Mi"
+                }
+                limits = {
+                  cpu    = "1000m"
+                  memory = "1Gi"
+                }
+              }
+            }
+            ] : [], var.enable_paperclip_firebase_cli ? [
+            {
+              # Provisions firebase-tools onto the PVC once per version
+              # (stamp-guarded); same pattern and installer image as qmd-setup.
+              name    = "firebase-setup"
+              image   = var.paperclip_qmd_installer_image
+              command = ["sh", "-c"]
+              args = [
+                <<-EOT
+                set -e
+                if [ "$(cat /paperclip/.firebase/.version 2>/dev/null)" = "${var.paperclip_firebase_tools_version}" ]; then
+                  echo "firebase-tools ${var.paperclip_firebase_tools_version} already installed"
+                  exit 0
+                fi
+                npm_config_cache=/tmp/npm-cache npm install --no-update-notifier --prefix /paperclip/.firebase "firebase-tools@${var.paperclip_firebase_tools_version}"
+                npm exec --prefix /paperclip/.firebase -- firebase --version
+                echo "${var.paperclip_firebase_tools_version}" > /paperclip/.firebase/.version
                 EOT
               ]
               env = [
@@ -545,78 +531,19 @@ resource "kubectl_manifest" "paperclip_deployment" {
                   }
                 },
                 {
-                  name = "ANTHROPIC_API_KEY"
-                  valueFrom = {
-                    secretKeyRef = {
-                      name     = "paperclip-api-keys"
-                      key      = "ANTHROPIC_API_KEY"
-                      optional = true
-                    }
-                  }
-                },
-                {
-                  name = "OPENAI_API_KEY"
-                  valueFrom = {
-                    secretKeyRef = {
-                      name     = "paperclip-api-keys"
-                      key      = "OPENAI_API_KEY"
-                      optional = true
-                    }
-                  }
-                },
-                {
-                  name = "OPENROUTER_API_KEY"
-                  valueFrom = {
-                    secretKeyRef = {
-                      name     = "paperclip-api-keys"
-                      key      = "OPENROUTER_API_KEY"
-                      optional = true
-                    }
-                  }
-                },
-                {
-                  name = "OPENROUTER_BASE_URL"
-                  valueFrom = {
-                    secretKeyRef = {
-                      name     = "paperclip-api-keys"
-                      key      = "OPENROUTER_BASE_URL"
-                      optional = true
-                    }
-                  }
-                },
-                {
-                  name = "OLLAMA_CLOUD_API_KEY"
-                  valueFrom = {
-                    secretKeyRef = {
-                      name     = "paperclip-api-keys"
-                      key      = "OLLAMA_CLOUD_API_KEY"
-                      optional = true
-                    }
-                  }
-                },
-                {
-                  name = "OLLAMA_BASE_URL"
-                  valueFrom = {
-                    secretKeyRef = {
-                      name     = "paperclip-api-keys"
-                      key      = "OLLAMA_BASE_URL"
-                      optional = true
-                    }
-                  }
-                },
-                {
                   # Budget lane (recovery retries) of the opencode_local adapter.
                   # Env name is fixed upstream by the adapter; the VALUE is a full
                   # provider/model id, free to target any configured provider.
                   name  = "PAPERCLIP_OPENCODE_CHEAP_MODEL"
                   value = var.paperclip_cheap_model
                 }
-                ], var.enable_paperclip_qmd ? [
+                ], var.enable_paperclip_qmd || var.enable_paperclip_firebase_cli ? [
                 {
-                  # qmd is installed on the PVC by the qmd-setup initContainer
-                  # (npm --prefix layout: bin lives in node_modules/.bin).
+                  # qmd / firebase-tools are installed on the PVC by the
+                  # qmd-setup / firebase-setup initContainers (npm --prefix
+                  # layout: bins live in node_modules/.bin).
                   name  = "PATH"
-                  value = "/paperclip/.qmd/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+                  value = "/paperclip/.qmd/node_modules/.bin:/paperclip/.firebase/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
                 }
               ] : [])
               volumeMounts = [
@@ -637,19 +564,24 @@ resource "kubectl_manifest" "paperclip_deployment" {
               }
               livenessProbe = {
                 httpGet = {
-                  path = "/"
+                  path = "/api/health"
                   port = 3100
                 }
-                initialDelaySeconds = 30
-                periodSeconds       = 10
+                # Generous timing: agent run spikes can saturate the node
+                # briefly; a tight probe kill-loops the pod under load.
+                initialDelaySeconds = 60
+                periodSeconds       = 15
+                timeoutSeconds      = 5
+                failureThreshold    = 6
               }
               readinessProbe = {
                 httpGet = {
-                  path = "/"
+                  path = "/api/health"
                   port = 3100
                 }
-                initialDelaySeconds = 10
-                periodSeconds       = 5
+                initialDelaySeconds = 15
+                periodSeconds       = 10
+                timeoutSeconds      = 5
               }
             }
           ]

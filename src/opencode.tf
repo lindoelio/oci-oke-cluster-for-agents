@@ -474,7 +474,7 @@ resource "kubectl_manifest" "opencode_deployment" {
                       }
                     }
                   }
-                ] : []
+                ] : [],
                 var.gitlab_token != "" ? [
                   {
                     name = "GITLAB_TOKEN"

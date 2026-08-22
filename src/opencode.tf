@@ -112,6 +112,8 @@ resource "kubectl_manifest" "opencode_llm_keys_secret" {
       var.openrouter_api_key != "" ? { OPENROUTER_API_KEY = var.openrouter_api_key } : {},
       var.ollama_cloud_api_key != "" ? { OLLAMA_CLOUD_API_KEY = var.ollama_cloud_api_key } : {},
       var.deepinfra_api_key != "" ? { DEEPINFRA_API_KEY = var.deepinfra_api_key } : {},
+      var.alibaba_token_plan_api_key != "" ? { ALIBABA_TOKEN_PLAN_API_KEY = var.alibaba_token_plan_api_key } : {},
+      var.alibaba_token_plan_api_key_secondary != "" ? { ALIBABA_TOKEN_PLAN_API_KEY_SECONDARY = var.alibaba_token_plan_api_key_secondary } : {},
     )
   }
 }
@@ -140,6 +142,34 @@ resource "kubectl_manifest" "opencode_dev_credentials" {
     )
   }
 }
+################################################################################
+# OpenCode Tool Keys Secret (GitLab, Neon, Expo, Paddle)
+################################################################################
+
+resource "kubectl_manifest" "opencode_tool_keys" {
+  count = var.enable_opencode ? 1 : 0
+
+  depends_on = [kubectl_manifest.opencode_namespace]
+
+  manifest = {
+    apiVersion = "v1"
+    kind       = "Secret"
+    metadata = {
+      name      = "opencode-tool-keys"
+      namespace = "opencode"
+    }
+    type = "Opaque"
+    stringData = merge(
+      var.gitlab_token != "" ? { GITLAB_TOKEN = var.gitlab_token } : {},
+      var.gitlab_preview_token != "" ? { GITLAB_PREVIEW_TOKEN = var.gitlab_preview_token } : {},
+      var.neon_api_key != "" ? { NEON_API_KEY = var.neon_api_key } : {},
+      var.neon_org_id != "" ? { NEON_ORG_ID = var.neon_org_id } : {},
+      var.expo_token != "" ? { EXPO_TOKEN = var.expo_token } : {},
+      var.paddle_sandbox_api_key != "" ? { PADDLE_SANDBOX_API_KEY = var.paddle_sandbox_api_key } : {},
+    )
+  }
+}
+
 
 ################################################################################
 # OpenCode Go provider secret (only created when a key is provided)
@@ -213,6 +243,7 @@ resource "kubectl_manifest" "opencode_deployment" {
     kubectl_manifest.opencode_llm_keys_secret,
     kubectl_manifest.opencode_go_secret,
     kubectl_manifest.opencode_pvc,
+    kubectl_manifest.opencode_tool_keys,
   ]
 
   manifest = {
@@ -384,6 +415,30 @@ resource "kubectl_manifest" "opencode_deployment" {
                     }
                   }
                 ] : [],
+                var.alibaba_token_plan_api_key != "" ? [
+                  {
+                    name = "ALIBABA_TOKEN_PLAN_API_KEY"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name     = "opencode-llm-keys"
+                        key      = "ALIBABA_TOKEN_PLAN_API_KEY"
+                        optional = true
+                      }
+                    }
+                  }
+                ] : [],
+                var.alibaba_token_plan_api_key_secondary != "" ? [
+                  {
+                    name = "ALIBABA_TOKEN_PLAN_API_KEY_SECONDARY"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name     = "opencode-llm-keys"
+                        key      = "ALIBABA_TOKEN_PLAN_API_KEY_SECONDARY"
+                        optional = true
+                      }
+                    }
+                  }
+                ] : [],
                 var.github_token != "" ? [
                   {
                     name = "GITHUB_TOKEN"
@@ -415,6 +470,78 @@ resource "kubectl_manifest" "opencode_deployment" {
                       secretKeyRef = {
                         name     = "opencode-dev-credentials"
                         key      = "FIREBASE_TOKEN"
+                        optional = true
+                      }
+                    }
+                  }
+                ] : []
+                var.gitlab_token != "" ? [
+                  {
+                    name = "GITLAB_TOKEN"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name     = "opencode-tool-keys"
+                        key      = "GITLAB_TOKEN"
+                        optional = true
+                      }
+                    }
+                  }
+                ] : [],
+                var.gitlab_preview_token != "" ? [
+                  {
+                    name = "GITLAB_PREVIEW_TOKEN"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name     = "opencode-tool-keys"
+                        key      = "GITLAB_PREVIEW_TOKEN"
+                        optional = true
+                      }
+                    }
+                  }
+                ] : [],
+                var.neon_api_key != "" ? [
+                  {
+                    name = "NEON_API_KEY"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name     = "opencode-tool-keys"
+                        key      = "NEON_API_KEY"
+                        optional = true
+                      }
+                    }
+                  }
+                ] : [],
+                var.neon_org_id != "" ? [
+                  {
+                    name = "NEON_ORG_ID"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name     = "opencode-tool-keys"
+                        key      = "NEON_ORG_ID"
+                        optional = true
+                      }
+                    }
+                  }
+                ] : [],
+                var.expo_token != "" ? [
+                  {
+                    name = "EXPO_TOKEN"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name     = "opencode-tool-keys"
+                        key      = "EXPO_TOKEN"
+                        optional = true
+                      }
+                    }
+                  }
+                ] : [],
+                var.paddle_sandbox_api_key != "" ? [
+                  {
+                    name = "PADDLE_SANDBOX_API_KEY"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name     = "opencode-tool-keys"
+                        key      = "PADDLE_SANDBOX_API_KEY"
                         optional = true
                       }
                     }

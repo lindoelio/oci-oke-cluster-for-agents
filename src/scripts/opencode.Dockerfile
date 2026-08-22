@@ -61,6 +61,13 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
 # Upgrade npm and install pnpm latest
 RUN npm install -g npm@latest pnpm@latest
 
+# Install optional CLIs: GitLab glab, Neon neonctl, Expo eas-cli (ARM64)
+RUN curl -fsSL "https://gitlab.com/gitlab-org/cli/-/releases/latest/download/glab_linux_arm64.tar.gz" -o /tmp/glab.tar.gz \
+    && tar -xzf /tmp/glab.tar.gz -C /tmp \
+    && mv /tmp/bin/glab /usr/local/bin/glab \
+    && rm -rf /tmp/bin /tmp/glab.tar.gz
+RUN npm install -g neonctl eas-cli
+
 # Install GitHub CLI (gh) for ARM64
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | \
     dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg 2>/dev/null && \

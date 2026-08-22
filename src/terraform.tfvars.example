@@ -64,6 +64,13 @@ paperclip_exposure          = "public"  # "public" = LoadBalancer, "private" = C
 # { "type": "service_account", ... }
 # EOT
 # firebase_token = "1//..."              # Firebase CLI token (firebase login:ci)
+# Optional CLI credentials injected into OpenCode Web
+# gitlab_token              = "glpat-..."   # GitLab PAT (api, write_repository) for glab
+# gitlab_preview_token      = "glpat-..."   # GitLab preview token (optional, masked CI var)
+# neon_api_key              = "..."         # Neon API key for neon/neonctl
+# neon_org_id               = "..."         # Neon org id (multi-org accounts)
+# expo_token                = "..."         # Expo access token for eas
+# paddle_sandbox_api_key    = "..."         # Paddle sandbox key for paddle-sandbox MCP
 
 # --- OpenCode Web (Agent Interface) ---
 # OpenCode Web is deployed directly from the upstream ARM64 release tarball

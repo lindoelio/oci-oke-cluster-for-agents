@@ -475,3 +475,44 @@ variable "firebase_token" {
   default     = ""
   sensitive   = true
 }
+
+variable "gitlab_token" {
+  description = "GitLab personal access token for glab / GitLab API in OpenCode (scopes: api, write_repository, read_api)."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "gitlab_preview_token" {
+  description = "GitLab token used for MR preview environments in CI (masked GitLab CI variable source). Optional."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "neon_api_key" {
+  description = "Neon API key for the neon/neonctl CLI in OpenCode."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "neon_org_id" {
+  description = "Neon organization id (multi-org accounts) used by ensure-neon-project.mjs."
+  type        = string
+  default     = ""
+}
+
+variable "expo_token" {
+  description = "Expo access token for eas / EAS CLI in OpenCode."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "paddle_sandbox_api_key" {
+  description = "Paddle sandbox API key for the paddle-sandbox MCP used by billing agents."
+  type        = string
+  default     = ""
+  sensitive   = true
+}

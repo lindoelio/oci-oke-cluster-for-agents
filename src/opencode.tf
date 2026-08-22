@@ -325,7 +325,7 @@ resource "kubectl_manifest" "opencode_deployment" {
             {
               name            = "opencode"
               image           = docker_image.opencode[count.index].name
-              imagePullPolicy = "IfNotPresent"
+              imagePullPolicy = "Always"
               ports = [
                 {
                   containerPort = 4096

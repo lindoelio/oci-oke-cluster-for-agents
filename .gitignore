@@ -56,6 +56,13 @@ tfplan
 # Specs
 .specs
 
+# Local scratch (tokens, notes)
+.tmp/
+src/.tmp/
+
+# Stray curl cookie jar (session cookies — never commit)
+src/300
+
 # Scripts (contain generated configs and secrets)
 src/scripts/
 !src/scripts/opencode.Dockerfile

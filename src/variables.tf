@@ -100,6 +100,88 @@ variable "paperclip_image_tag" {
   default     = "latest"
 }
 
+variable "enable_paperclip_qmd" {
+  description = "Provision qmd (local BM25 + vector + rerank search for agent memory recall) onto the Paperclip PVC via the qmd-setup initContainer"
+  type        = bool
+  default     = true
+}
+
+variable "paperclip_qmd_version" {
+  description = "Version of the @tobilu/qmd npm package installed on the Paperclip PVC"
+  type        = string
+  default     = "2.5.3"
+}
+
+variable "paperclip_qmd_installer_image" {
+  description = "Image used by the qmd-setup initContainer to install qmd; must be glibc-based Debian with the same Node major as the Paperclip image so native prebuilds apply"
+  type        = string
+  default     = "docker.io/library/node:24-slim"
+}
+
+variable "enable_paperclip_firebase_cli" {
+  description = "Provision Firebase CLI onto the Paperclip PVC via the firebase-setup initContainer so agents can run firebase commands"
+  type        = bool
+  default     = true
+}
+
+variable "paperclip_firebase_tools_version" {
+  description = "Version of the firebase-tools npm package installed on the Paperclip PVC"
+  type        = string
+  default     = "15.26.0"
+}
+
+variable "enable_metrics_server" {
+  description = "Deploy metrics-server (kubectl top, resource visibility) into kube-system"
+  type        = bool
+  default     = true
+}
+
+variable "metrics_server_chart_version" {
+  description = "Helm chart version of metrics-server"
+  type        = string
+  default     = "3.13.1"
+}
+
+variable "alibaba_token_plan_api_key" {
+  description = "Alibaba Token Plan (International, ap-southeast-1) API key seeded as a company secret for the primary company; consumed by the built-in opencode 'alibaba-token-plan' provider via ALIBABA_TOKEN_PLAN_API_KEY. Company mapping lives in the git-ignored seeding script/spec"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "alibaba_token_plan_api_key_secondary" {
+  description = "Optional independent Alibaba Token Plan API key copy for a second company (rotatable per company); empty disables seeding for that company"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "enable_paperclip_browser" {
+  description = "Deploy a headless Chromium (CDP) service in the paperclip namespace for agent browser automation"
+  type        = bool
+  default     = true
+}
+
+variable "paperclip_browser_version" {
+  description = "Playwright version for the browser service image and the agent-side client library (kept in sync)"
+  type        = string
+  default     = "1.62.1"
+}
+
+variable "deepinfra_api_key" {
+  description = "DeepInfra API key (OpenAI-compatible, api.deepinfra.com/v1) for the primary company; seeded as a company secret and injected into the OpenCode Web server for the built-in deepinfra provider"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "deepinfra_api_key_secondary" {
+  description = "Independent DeepInfra API key for a second company (rotatable per company); empty disables seeding for that company. Company mapping lives in the git-ignored seeding script"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "paperclip_exposure" {
   description = "Paperclip service exposure: 'public' (LoadBalancer) or 'private' (ClusterIP)"
   type        = string
@@ -151,6 +233,12 @@ variable "paperclip_memory_limit" {
   description = "Memory limit for Paperclip instance"
   type        = string
   default     = "4Gi"
+}
+
+variable "paperclip_cheap_model" {
+  description = "Fallback/budget-lane model for Paperclip's opencode_local adapter (recovery retries). Full provider/model id — any provider the deployment supports (OpenRouter, OpenCode Go, etc.), not tied to one gateway. The adapter's upstream default is an OpenAI model that our gateway does not serve."
+  type        = string
+  default     = "openrouter/nvidia/nemotron-3.5-lightning:free"
 }
 
 variable "ollama_cloud_api_key" {
@@ -331,7 +419,7 @@ variable "opencode_memory_limit" {
 }
 
 variable "opencode_registry" {
-  description = "Container registry for the built OpenCode image: 'ghcr' (GitHub Container Registry) or 'dockerhub' (Docker Hub)"
+  description = "Container registry for the locally built OpenCode image: 'ghcr' (GitHub Container Registry) or 'dockerhub' (Docker Hub)"
   type        = string
   default     = "ghcr"
 
@@ -360,6 +448,13 @@ variable "opencode_registry_token" {
   sensitive   = true
 }
 
+variable "opencode_go_api_key" {
+  description = "OpenCode Go subscription API key (https://opencode.ai/go). When set, registers the built-in 'opencode-go' provider in both OpenCode Web and Paperclip's bundled opencode CLI."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "github_token" {
   description = "GitHub Personal Access Token (classic) for GitHub CLI authentication in OpenCode. Scopes: repo, workflow."
   type        = string
@@ -376,6 +471,47 @@ variable "gcp_service_account_key" {
 
 variable "firebase_token" {
   description = "Firebase CLI token (optional). Can be generated via 'firebase login:ci'. Reuses GCP service account if empty."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "gitlab_token" {
+  description = "GitLab personal access token for glab / GitLab API in OpenCode (scopes: api, write_repository, read_api)."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "gitlab_preview_token" {
+  description = "GitLab token used for MR preview environments in CI (masked GitLab CI variable source). Optional."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "neon_api_key" {
+  description = "Neon API key for the neon/neonctl CLI in OpenCode."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "neon_org_id" {
+  description = "Neon organization id (multi-org accounts) used by ensure-neon-project.mjs."
+  type        = string
+  default     = ""
+}
+
+variable "expo_token" {
+  description = "Expo access token for eas / EAS CLI in OpenCode."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "paddle_sandbox_api_key" {
+  description = "Paddle sandbox API key for the paddle-sandbox MCP used by billing agents."
   type        = string
   default     = ""
   sensitive   = true

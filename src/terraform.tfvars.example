@@ -36,6 +36,9 @@ enable_openclaw  = true
 # Paperclip is deployed directly (no operator) with a managed PostgreSQL
 # paperclip_image_repository = "ghcr.io/paperclipai/paperclip"
 # paperclip_image_tag        = "latest"
+# enable_paperclip_qmd       = true   # qmd on the PVC via the qmd-setup initContainer (no registry/Docker needed)
+# paperclip_qmd_version      = "2.5.3"
+# paperclip_qmd_installer_image = "docker.io/library/node:24-slim"
 paperclip_exposure          = "public"  # "public" = LoadBalancer, "private" = ClusterIP
 # paperclip_public_url       = ""  # Auto-detected from Ingress LB IP when empty. Set to override.
 # paperclip_custom_domain    = "paperclip.example.com"  # Enables HTTPS + Let's Encrypt
@@ -44,6 +47,9 @@ paperclip_exposure          = "public"  # "public" = LoadBalancer, "private" = C
 # paperclip_storage_size     = "5Gi"
 # paperclip_cpu_limit        = "1000m"
 # paperclip_memory_limit     = "4Gi"
+# paperclip_cheap_model = "openrouter/nvidia/nemotron-3.5-lightning:free"  # opencode_local budget lane (recovery retries); any provider/model
+# enable_paperclip_browser = true   # headless Chromium (CDP) service for agent browser automation
+# paperclip_browser_version = "1.62.1"
 
 # LLM API Keys (at least one required for Paperclip agents)
 # All keys are optional — Paperclip will use whichever providers are configured
@@ -51,6 +57,20 @@ paperclip_exposure          = "public"  # "public" = LoadBalancer, "private" = C
 # openai_api_key    = "sk-..."
 # openrouter_api_key = "sk-or-v1-..."  # Enables OpenRouter (Pi, Hermes, OpenCode, etc.)
 # ollama_cloud_api_key = "sk-oll-..."   # Enables Ollama Cloud models
+
+# Developer credentials (injected into Paperclip and OpenCode Web agent envs)
+# github_token = "ghp_..."               # GitHub PAT (scopes: repo, workflow) for gh CLI
+# gcp_service_account_key = <<EOT        # GCP service account key JSON for gcloud
+# { "type": "service_account", ... }
+# EOT
+# firebase_token = "1//..."              # Firebase CLI token (firebase login:ci)
+# Optional CLI credentials injected into OpenCode Web
+# gitlab_token              = "glpat-..."   # GitLab PAT (api, write_repository) for glab
+# gitlab_preview_token      = "glpat-..."   # GitLab preview token (optional, masked CI var)
+# neon_api_key              = "..."         # Neon API key for neon/neonctl
+# neon_org_id               = "..."         # Neon org id (multi-org accounts)
+# expo_token                = "..."         # Expo access token for eas
+# paddle_sandbox_api_key    = "..."         # Paddle sandbox key for paddle-sandbox MCP
 
 # --- OpenCode Web (Agent Interface) ---
 # OpenCode Web is deployed directly from the upstream ARM64 release tarball
@@ -90,3 +110,4 @@ openclaw_llm_api_key     = "your-llm-api-key-here"
 openclaw_telegram_enabled   = true
 openclaw_telegram_bot_token = "123456:ABC-DEF..."
 # openclaw_telegram_owner_id = "8547618136"  # Your Telegram numeric user ID for auto-approval
+# deepinfra_api_key = "..."  # DeepInfra (OpenAI-compatible) — default provider models for both companies

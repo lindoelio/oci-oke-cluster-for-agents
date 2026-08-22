@@ -240,6 +240,43 @@ resource "kubectl_manifest" "openclaw_instance" {
 }
 
 ################################################################################
+# OpenClaw data PVC (created by the operator)
+# Declared here so that disabling OpenClaw also destroys the PVC and releases
+# its 50 GB block volume back to the Always Free storage quota. The operator
+# defaults to persistence.orphan=true, so it leaves the PVC alone on CR delete.
+# Imported once with:
+#   terraform import 'kubectl_manifest.openclaw_data_pvc[0]' \
+#     'v1//PersistentVolumeClaim//<prefix>-openclaw-data//openclaw'
+################################################################################
+
+resource "kubectl_manifest" "openclaw_data_pvc" {
+  count = var.enable_openclaw ? 1 : 0
+
+  depends_on = [kubectl_manifest.openclaw_namespace]
+
+  manifest = {
+    apiVersion = "v1"
+    kind       = "PersistentVolumeClaim"
+    metadata = {
+      name      = "${var.project_prefix}-openclaw-data"
+      namespace = "openclaw"
+      labels = {
+        managed-by = "terraform"
+      }
+    }
+    spec = {
+      accessModes      = ["ReadWriteOnce"]
+      storageClassName = "oci-bv"
+      resources = {
+        requests = {
+          storage = var.openclaw_storage_size
+        }
+      }
+    }
+  }
+}
+
+################################################################################
 # Post-deploy fix for stale OpenAI Codex auth routes
 # Runs via local-exec to configure models.json + auth-profiles.json in the pod
 ################################################################################

@@ -1,10 +1,10 @@
-# OKE Cluster with Paperclip + OpenClaw + OpenCode
+# OCI OKE Cluster for Remote AI Agents
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Terraform](https://img.shields.io/badge/Terraform-%3E%3D1.14-623CE4?logo=terraform)](https://www.terraform.io)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-v1.36-326CE5?logo=kubernetes)](https://kubernetes.io)
 
-A single-command Terraform deployment for an OCI Free Tier Kubernetes cluster with **Paperclip** (AI agent orchestration), **OpenClaw** (AI agent runtime), and **OpenCode Web** (AI agent interface). Batteries included — NGINX Ingress, cert-manager with Let's Encrypt, and managed PostgreSQL, all within the free tier.
+A single-command Terraform deployment that provisions a **private Kubernetes cluster on OCI for remote AI Agents**, for development and testing purposes. Ships with **Paperclip** (AI agent orchestration), **OpenClaw** (AI agent runtime), and **OpenCode Web** (AI agent interface). Batteries included — NGINX Ingress, cert-manager with Let's Encrypt, and managed PostgreSQL, all within the OCI free tier.
 
 ## Features
 
@@ -290,12 +290,6 @@ kubectl get certificate -n paperclip # TLS cert (if custom domain configured)
 .
 ├── README.md
 ├── LICENSE                         # MIT License
-├── AGENTS.md                       # AI agent guidelines
-├── ARCHITECTURE.md                 # System architecture and component layout
-├── CONTRIBUTING.md                 # Contribution workflow
-├── SECURITY.md                     # Security model and hardening checklist
-├── STYLEGUIDE.md                   # Terraform formatting and naming rules
-├── TESTING.md                      # Validation and testing strategy
 ├── .gitignore
 │
 └── src/
@@ -303,16 +297,17 @@ kubectl get certificate -n paperclip # TLS cert (if custom domain configured)
     ├── oke.tf                      # OKE module + CRI-O fix DaemonSet
     ├── paperclip.tf                # Paperclip Deployment + PostgreSQL StatefulSet
     ├── openclaw.tf                 # OpenClaw operator + OpenClawInstance CRD
-    ├── opencode.tf               # OpenCode Web deployment + Docker build + registry push
+    ├── openclaw-ingress.tf         # OpenClaw Ingress resources
+    ├── opencode.tf                 # OpenCode Web deployment + Docker build + registry push
+    ├── browser.tf                  # Headless Chromium (CDP) browser service for agents
+    ├── backup.tf                   # Free-tier backups (Object Storage + daily CronJobs)
     ├── cert-manager.tf             # cert-manager Helm release + Let's Encrypt ClusterIssuer
     ├── ingress.tf                  # NGINX Ingress Controller + shared Ingress resources
+    ├── metrics-server.tf           # metrics-server Helm release
     ├── variables.tf                # All variable definitions
     ├── output.tf                   # Terraform outputs + post-deploy instructions
-    ├── scripts/                    # Onboarding, IP detection, patching helpers, and Dockerfiles
-    │   ├── paperclip_onboard.sh
-    │   ├── detect_ingress_ip.py
-    │   ├── patch_paperclip.py
-    │   └── opencode.Dockerfile
+    ├── scripts/
+    │   └── opencode.Dockerfile     # OpenCode Web ARM64 image build
     └── terraform.tfvars.example    # Example configuration (copy to terraform.tfvars)
 ```
 
@@ -335,7 +330,7 @@ kubectl get certificate -n paperclip # TLS cert (if custom domain configured)
 
 ## Before Going to Production
 
-This project is designed for **development, learning, and experimentation**. The defaults prioritize simplicity and cost-effectiveness over security. See [SECURITY.md](SECURITY.md) for the full hardening checklist. Key items:
+This project is designed for **development and testing of remote AI agents in a private environment**. The defaults prioritize simplicity and cost-effectiveness over security. If you plan to run anything sensitive, harden it first. Key items:
 
 ### Networking & Access
 
@@ -411,12 +406,3 @@ terraform apply
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
-
-## Documentation
-
-- [ARCHITECTURE.md](ARCHITECTURE.md) — System architecture and component layout
-- [SECURITY.md](SECURITY.md) — Security model and hardening checklist
-- [CONTRIBUTING.md](CONTRIBUTING.md) — Contribution workflow
-- [STYLEGUIDE.md](STYLEGUIDE.md) — Terraform formatting and naming rules
-- [TESTING.md](TESTING.md) — Validation and testing strategy
-- [AGENTS.md](AGENTS.md) — AI agent guidelines

@@ -29,7 +29,7 @@ resource "docker_image" "opencode" {
   }
 }
 
-# Image already built and pushed to docker.io/lindoelio/opencode:1.17.11
+# Image already built and pushed to docker.io/lindoelio/opencode:1.18.21
 # docker_registry_image resource removed — push completed manually due to provider digest bug
 
 resource "time_sleep" "after_opencode_image" {
@@ -111,6 +111,9 @@ resource "kubectl_manifest" "opencode_llm_keys_secret" {
       var.openai_api_key != "" ? { OPENAI_API_KEY = var.openai_api_key } : {},
       var.openrouter_api_key != "" ? { OPENROUTER_API_KEY = var.openrouter_api_key } : {},
       var.ollama_cloud_api_key != "" ? { OLLAMA_CLOUD_API_KEY = var.ollama_cloud_api_key } : {},
+      var.deepinfra_api_key != "" ? { DEEPINFRA_API_KEY = var.deepinfra_api_key } : {},
+      var.alibaba_token_plan_api_key != "" ? { ALIBABA_TOKEN_PLAN_API_KEY = var.alibaba_token_plan_api_key } : {},
+      var.alibaba_token_plan_api_key_secondary != "" ? { ALIBABA_TOKEN_PLAN_API_KEY_SECONDARY = var.alibaba_token_plan_api_key_secondary } : {},
     )
   }
 }
@@ -137,6 +140,60 @@ resource "kubectl_manifest" "opencode_dev_credentials" {
       var.gcp_service_account_key != "" ? { GOOGLE_APPLICATION_CREDENTIALS_JSON = var.gcp_service_account_key } : {},
       var.firebase_token != "" ? { FIREBASE_TOKEN = var.firebase_token } : {},
     )
+  }
+}
+################################################################################
+# OpenCode Tool Keys Secret (GitLab, Neon, Expo, Paddle)
+################################################################################
+
+resource "kubectl_manifest" "opencode_tool_keys" {
+  count = var.enable_opencode ? 1 : 0
+
+  depends_on = [kubectl_manifest.opencode_namespace]
+
+  manifest = {
+    apiVersion = "v1"
+    kind       = "Secret"
+    metadata = {
+      name      = "opencode-tool-keys"
+      namespace = "opencode"
+    }
+    type = "Opaque"
+    stringData = merge(
+      var.gitlab_token != "" ? { GITLAB_TOKEN = var.gitlab_token } : {},
+      var.gitlab_preview_token != "" ? { GITLAB_PREVIEW_TOKEN = var.gitlab_preview_token } : {},
+      var.neon_api_key != "" ? { NEON_API_KEY = var.neon_api_key } : {},
+      var.neon_org_id != "" ? { NEON_ORG_ID = var.neon_org_id } : {},
+      var.expo_token != "" ? { EXPO_TOKEN = var.expo_token } : {},
+      var.paddle_sandbox_api_key != "" ? { PADDLE_SANDBOX_API_KEY = var.paddle_sandbox_api_key } : {},
+    )
+  }
+}
+
+
+################################################################################
+# OpenCode Go provider secret (only created when a key is provided)
+################################################################################
+
+resource "kubectl_manifest" "opencode_go_secret" {
+  count = var.enable_opencode && var.opencode_go_api_key != "" ? 1 : 0
+
+  depends_on = [kubectl_manifest.opencode_namespace]
+
+  manifest = {
+    apiVersion = "v1"
+    kind       = "Secret"
+    metadata = {
+      name      = "opencode-go-auth"
+      namespace = "opencode"
+      labels = {
+        managed-by = "terraform"
+      }
+    }
+    type = "Opaque"
+    stringData = {
+      OPENCODE_GO_API_KEY = var.opencode_go_api_key
+    }
   }
 }
 
@@ -184,7 +241,9 @@ resource "kubectl_manifest" "opencode_deployment" {
     time_sleep.after_opencode_image,
     kubectl_manifest.opencode_auth_secret,
     kubectl_manifest.opencode_llm_keys_secret,
+    kubectl_manifest.opencode_go_secret,
     kubectl_manifest.opencode_pvc,
+    kubectl_manifest.opencode_tool_keys,
   ]
 
   manifest = {
@@ -212,11 +271,61 @@ resource "kubectl_manifest" "opencode_deployment" {
           }
         }
         spec = {
+          securityContext = {
+            fsGroup = 1000
+          }
+          initContainers = var.opencode_go_api_key != "" ? [
+            {
+              name    = "opencode-go-auth"
+              image   = docker_image.opencode[count.index].name
+              command = ["python3", "-c"]
+              args    = [file("${path.module}/scripts/opencode_go_auth.py")]
+              env = [
+                {
+                  name  = "AUTH_PATH"
+                  value = "/home/opencode/.local/share/opencode/auth.json"
+                },
+                {
+                  name  = "AUTH_UID"
+                  value = "1000"
+                },
+                {
+                  name  = "AUTH_GID"
+                  value = "1000"
+                },
+                {
+                  name = "OPENCODE_GO_API_KEY"
+                  valueFrom = {
+                    secretKeyRef = {
+                      name = "opencode-go-auth"
+                      key  = "OPENCODE_GO_API_KEY"
+                    }
+                  }
+                }
+              ]
+              volumeMounts = [
+                {
+                  name      = "opencode-data"
+                  mountPath = "/home/opencode/.local/share/opencode"
+                }
+              ]
+              resources = {
+                requests = {
+                  cpu    = "10m"
+                  memory = "32Mi"
+                }
+                limits = {
+                  cpu    = "100m"
+                  memory = "128Mi"
+                }
+              }
+            }
+          ] : []
           containers = [
             {
               name            = "opencode"
               image           = docker_image.opencode[count.index].name
-              imagePullPolicy = "IfNotPresent"
+              imagePullPolicy = "Always"
               ports = [
                 {
                   containerPort = 4096
@@ -237,6 +346,13 @@ resource "kubectl_manifest" "opencode_deployment" {
                   {
                     name  = "OPENCODE_SERVER_USERNAME"
                     value = "opencode"
+                  },
+                  {
+                    # The kubelet creates the volume mount's intermediate dirs as root,
+                    # so the app cannot mkdir ~/.local/state on the container FS.
+                    # Route XDG state into the (fsGroup-writable) data volume instead.
+                    name  = "XDG_STATE_HOME"
+                    value = "/home/opencode/.local/share/opencode/state"
                   }
                 ],
                 var.anthropic_api_key != "" ? [
@@ -287,6 +403,42 @@ resource "kubectl_manifest" "opencode_deployment" {
                     }
                   }
                 ] : [],
+                var.deepinfra_api_key != "" ? [
+                  {
+                    name = "DEEPINFRA_API_KEY"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name     = "opencode-llm-keys"
+                        key      = "DEEPINFRA_API_KEY"
+                        optional = true
+                      }
+                    }
+                  }
+                ] : [],
+                var.alibaba_token_plan_api_key != "" ? [
+                  {
+                    name = "ALIBABA_TOKEN_PLAN_API_KEY"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name     = "opencode-llm-keys"
+                        key      = "ALIBABA_TOKEN_PLAN_API_KEY"
+                        optional = true
+                      }
+                    }
+                  }
+                ] : [],
+                var.alibaba_token_plan_api_key_secondary != "" ? [
+                  {
+                    name = "ALIBABA_TOKEN_PLAN_API_KEY_SECONDARY"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name     = "opencode-llm-keys"
+                        key      = "ALIBABA_TOKEN_PLAN_API_KEY_SECONDARY"
+                        optional = true
+                      }
+                    }
+                  }
+                ] : [],
                 var.github_token != "" ? [
                   {
                     name = "GITHUB_TOKEN"
@@ -318,6 +470,78 @@ resource "kubectl_manifest" "opencode_deployment" {
                       secretKeyRef = {
                         name     = "opencode-dev-credentials"
                         key      = "FIREBASE_TOKEN"
+                        optional = true
+                      }
+                    }
+                  }
+                ] : [],
+                var.gitlab_token != "" ? [
+                  {
+                    name = "GITLAB_TOKEN"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name     = "opencode-tool-keys"
+                        key      = "GITLAB_TOKEN"
+                        optional = true
+                      }
+                    }
+                  }
+                ] : [],
+                var.gitlab_preview_token != "" ? [
+                  {
+                    name = "GITLAB_PREVIEW_TOKEN"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name     = "opencode-tool-keys"
+                        key      = "GITLAB_PREVIEW_TOKEN"
+                        optional = true
+                      }
+                    }
+                  }
+                ] : [],
+                var.neon_api_key != "" ? [
+                  {
+                    name = "NEON_API_KEY"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name     = "opencode-tool-keys"
+                        key      = "NEON_API_KEY"
+                        optional = true
+                      }
+                    }
+                  }
+                ] : [],
+                var.neon_org_id != "" ? [
+                  {
+                    name = "NEON_ORG_ID"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name     = "opencode-tool-keys"
+                        key      = "NEON_ORG_ID"
+                        optional = true
+                      }
+                    }
+                  }
+                ] : [],
+                var.expo_token != "" ? [
+                  {
+                    name = "EXPO_TOKEN"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name     = "opencode-tool-keys"
+                        key      = "EXPO_TOKEN"
+                        optional = true
+                      }
+                    }
+                  }
+                ] : [],
+                var.paddle_sandbox_api_key != "" ? [
+                  {
+                    name = "PADDLE_SANDBOX_API_KEY"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name     = "opencode-tool-keys"
+                        key      = "PADDLE_SANDBOX_API_KEY"
                         optional = true
                       }
                     }

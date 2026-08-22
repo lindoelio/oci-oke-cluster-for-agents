@@ -156,6 +156,32 @@ variable "alibaba_token_plan_api_key_secondary" {
   sensitive   = true
 }
 
+variable "enable_paperclip_browser" {
+  description = "Deploy a headless Chromium (CDP) service in the paperclip namespace for agent browser automation"
+  type        = bool
+  default     = true
+}
+
+variable "paperclip_browser_version" {
+  description = "Playwright version for the browser service image and the agent-side client library (kept in sync)"
+  type        = string
+  default     = "1.62.1"
+}
+
+variable "deepinfra_api_key" {
+  description = "DeepInfra API key (OpenAI-compatible, api.deepinfra.com/v1) for the primary company; seeded as a company secret and injected into the OpenCode Web server for the built-in deepinfra provider"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "deepinfra_api_key_secondary" {
+  description = "Independent DeepInfra API key for a second company (rotatable per company); empty disables seeding for that company. Company mapping lives in the git-ignored seeding script"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "paperclip_exposure" {
   description = "Paperclip service exposure: 'public' (LoadBalancer) or 'private' (ClusterIP)"
   type        = string

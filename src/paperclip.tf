@@ -97,6 +97,45 @@ resource "kubectl_manifest" "paperclip_db_secret" {
 }
 
 ################################################################################
+# Model-catalog discovery secret. The Paperclip server lists available models
+# by spawning `opencode models` with its own process env, so provider keys must
+# exist at server level for the UI catalog. Cross-company leakage into agent
+# RUNS is prevented because every agent's run env explicitly overrides (or
+# blank-blocks) these same keys via per-company secret bindings.
+################################################################################
+
+resource "kubectl_manifest" "paperclip_model_discovery_secret" {
+  count = var.enable_paperclip && (var.openrouter_api_key != "" || var.ollama_cloud_api_key != "" || var.alibaba_token_plan_api_key != "") ? 1 : 0
+
+  depends_on = [kubectl_manifest.paperclip_namespace]
+
+  manifest = {
+    apiVersion = "v1"
+    kind       = "Secret"
+    metadata = {
+      name      = "paperclip-model-discovery"
+      namespace = "paperclip"
+      labels = {
+        managed-by = "terraform"
+      }
+    }
+    type = "Opaque"
+    stringData = merge(
+      var.openrouter_api_key != "" ? {
+        OPENROUTER_API_KEY  = var.openrouter_api_key
+        OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+      } : {},
+      var.ollama_cloud_api_key != "" ? {
+        OLLAMA_CLOUD_API_KEY = var.ollama_cloud_api_key
+        OLLAMA_BASE_URL      = "https://api.ollama.com"
+      } : {},
+      var.alibaba_token_plan_api_key != "" ? { ALIBABA_TOKEN_PLAN_API_KEY = var.alibaba_token_plan_api_key } : {},
+      var.deepinfra_api_key != "" ? { DEEPINFRA_API_KEY = var.deepinfra_api_key } : {},
+    )
+  }
+}
+
+################################################################################
 # PostgreSQL StatefulSet
 ################################################################################
 
@@ -263,7 +302,9 @@ resource "kubectl_manifest" "paperclip_deployment" {
 
   depends_on = [
     kubectl_manifest.paperclip_auth_secret,
+    kubectl_manifest.paperclip_model_discovery_secret,
     kubectl_manifest.paperclip_db_service,
+    kubectl_manifest.paperclip_browser_service,
     time_sleep.wait_for_ingress_lb,
     kubectl_manifest.paperclip_ingress,
   ]
@@ -472,8 +513,81 @@ resource "kubectl_manifest" "paperclip_deployment" {
                 }
               }
             }
+            ] : [], var.enable_paperclip_browser ? [
+            {
+              # Playwright client library on the PVC (browsers live in the
+              # paperclip-browser service; client connects over CDP).
+              name    = "browser-setup"
+              image   = "${var.paperclip_image_repository}:${var.paperclip_image_tag}"
+              command = ["sh", "-c"]
+              args = [
+                <<-EOT
+                set -e
+                if [ "$(cat /paperclip/.playwright/.version 2>/dev/null)" = "${var.paperclip_browser_version}" ]; then
+                  echo "playwright ${var.paperclip_browser_version} already installed"
+                  exit 0
+                fi
+                PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm_config_cache=/tmp/npm-cache npm install --no-update-notifier --prefix /paperclip/.playwright "playwright@${var.paperclip_browser_version}"
+                echo "${var.paperclip_browser_version}" > /paperclip/.playwright/.version
+                EOT
+              ]
+              env = [
+                {
+                  name  = "SUPPRESS_LABEL_WARNING"
+                  value = "True"
+                }
+              ]
+              volumeMounts = [
+                {
+                  name      = "paperclip-data"
+                  mountPath = "/paperclip"
+                }
+              ]
+              resources = {
+                requests = {
+                  cpu    = "100m"
+                  memory = "256Mi"
+                }
+                limits = {
+                  cpu    = "500m"
+                  memory = "512Mi"
+                }
+              }
+            }
           ] : [])
           containers = [
+            {
+              # Shares the pod netns: tools inside the main container that
+              # expect a LOCAL Chrome CDP endpoint (browser-harness et al.)
+              # find it at 127.0.0.1:9222, forwarded to the browser service.
+              name    = "cdp-forward"
+              image   = "${var.paperclip_image_repository}:${var.paperclip_image_tag}"
+              command = ["node", "-e", file("${path.module}/scripts/cdp_proxy.js")]
+              env = [
+                {
+                  name  = "CDP_TARGET_HOST"
+                  value = "paperclip-browser.paperclip.svc.cluster.local"
+                },
+                {
+                  name  = "CDP_TARGET_PORT"
+                  value = "9222"
+                },
+                {
+                  name  = "CDP_LISTEN_PORT"
+                  value = "9222"
+                }
+              ]
+              resources = {
+                requests = {
+                  cpu    = "10m"
+                  memory = "32Mi"
+                }
+                limits = {
+                  cpu    = "200m"
+                  memory = "128Mi"
+                }
+              }
+            },
             {
               name  = "paperclip"
               image = "${var.paperclip_image_repository}:${var.paperclip_image_tag}"
@@ -530,6 +644,68 @@ resource "kubectl_manifest" "paperclip_deployment" {
                     }
                   }
                 },
+                # Server-level provider keys for the UI model catalog only;
+                # agent runs override or blank-block these per company.
+                {
+                  name = "OPENROUTER_API_KEY"
+                  valueFrom = {
+                    secretKeyRef = {
+                      name     = "paperclip-model-discovery"
+                      key      = "OPENROUTER_API_KEY"
+                      optional = true
+                    }
+                  }
+                },
+                {
+                  name = "OPENROUTER_BASE_URL"
+                  valueFrom = {
+                    secretKeyRef = {
+                      name     = "paperclip-model-discovery"
+                      key      = "OPENROUTER_BASE_URL"
+                      optional = true
+                    }
+                  }
+                },
+                {
+                  name = "OLLAMA_CLOUD_API_KEY"
+                  valueFrom = {
+                    secretKeyRef = {
+                      name     = "paperclip-model-discovery"
+                      key      = "OLLAMA_CLOUD_API_KEY"
+                      optional = true
+                    }
+                  }
+                },
+                {
+                  name = "OLLAMA_BASE_URL"
+                  valueFrom = {
+                    secretKeyRef = {
+                      name     = "paperclip-model-discovery"
+                      key      = "OLLAMA_BASE_URL"
+                      optional = true
+                    }
+                  }
+                },
+                {
+                  name = "ALIBABA_TOKEN_PLAN_API_KEY"
+                  valueFrom = {
+                    secretKeyRef = {
+                      name     = "paperclip-model-discovery"
+                      key      = "ALIBABA_TOKEN_PLAN_API_KEY"
+                      optional = true
+                    }
+                  }
+                },
+                {
+                  name = "DEEPINFRA_API_KEY"
+                  valueFrom = {
+                    secretKeyRef = {
+                      name     = "paperclip-model-discovery"
+                      key      = "DEEPINFRA_API_KEY"
+                      optional = true
+                    }
+                  }
+                },
                 {
                   # Budget lane (recovery retries) of the opencode_local adapter.
                   # Env name is fixed upstream by the adapter; the VALUE is a full
@@ -537,13 +713,23 @@ resource "kubectl_manifest" "paperclip_deployment" {
                   name  = "PAPERCLIP_OPENCODE_CHEAP_MODEL"
                   value = var.paperclip_cheap_model
                 }
-                ], var.enable_paperclip_qmd || var.enable_paperclip_firebase_cli ? [
+                ], var.enable_paperclip_qmd || var.enable_paperclip_firebase_cli || var.enable_paperclip_browser ? [
                 {
                   # qmd / firebase-tools are installed on the PVC by the
                   # qmd-setup / firebase-setup initContainers (npm --prefix
                   # layout: bins live in node_modules/.bin).
                   name  = "PATH"
-                  value = "/paperclip/.qmd/node_modules/.bin:/paperclip/.firebase/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+                  value = "/paperclip/.qmd/node_modules/.bin:/paperclip/.firebase/node_modules/.bin:/paperclip/.playwright/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+                },
+                {
+                  # Lets agent scripts require("playwright") resolve the
+                  # PVC-installed client library.
+                  name  = "NODE_PATH"
+                  value = "/paperclip/.playwright/node_modules"
+                },
+                {
+                  name  = "PAPERCLIP_BROWSER_CDP"
+                  value = "http://paperclip-browser.paperclip.svc.cluster.local:9222"
                 }
               ] : [])
               volumeMounts = [

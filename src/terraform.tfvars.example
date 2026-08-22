@@ -48,6 +48,8 @@ paperclip_exposure          = "public"  # "public" = LoadBalancer, "private" = C
 # paperclip_cpu_limit        = "1000m"
 # paperclip_memory_limit     = "4Gi"
 # paperclip_cheap_model = "openrouter/nvidia/nemotron-3.5-lightning:free"  # opencode_local budget lane (recovery retries); any provider/model
+# enable_paperclip_browser = true   # headless Chromium (CDP) service for agent browser automation
+# paperclip_browser_version = "1.62.1"
 
 # LLM API Keys (at least one required for Paperclip agents)
 # All keys are optional — Paperclip will use whichever providers are configured
@@ -101,3 +103,4 @@ openclaw_llm_api_key     = "your-llm-api-key-here"
 openclaw_telegram_enabled   = true
 openclaw_telegram_bot_token = "123456:ABC-DEF..."
 # openclaw_telegram_owner_id = "8547618136"  # Your Telegram numeric user ID for auto-approval
+# deepinfra_api_key = "..."  # DeepInfra (OpenAI-compatible) — default provider models for both companies

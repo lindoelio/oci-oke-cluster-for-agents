@@ -29,7 +29,7 @@ resource "docker_image" "opencode" {
   }
 }
 
-# Image already built and pushed to docker.io/lindoelio/opencode:1.17.11
+# Image already built and pushed to docker.io/lindoelio/opencode:1.18.21
 # docker_registry_image resource removed — push completed manually due to provider digest bug
 
 resource "time_sleep" "after_opencode_image" {
@@ -111,6 +111,7 @@ resource "kubectl_manifest" "opencode_llm_keys_secret" {
       var.openai_api_key != "" ? { OPENAI_API_KEY = var.openai_api_key } : {},
       var.openrouter_api_key != "" ? { OPENROUTER_API_KEY = var.openrouter_api_key } : {},
       var.ollama_cloud_api_key != "" ? { OLLAMA_CLOUD_API_KEY = var.ollama_cloud_api_key } : {},
+      var.deepinfra_api_key != "" ? { DEEPINFRA_API_KEY = var.deepinfra_api_key } : {},
     )
   }
 }
@@ -366,6 +367,18 @@ resource "kubectl_manifest" "opencode_deployment" {
                       secretKeyRef = {
                         name     = "opencode-llm-keys"
                         key      = "OLLAMA_CLOUD_API_KEY"
+                        optional = true
+                      }
+                    }
+                  }
+                ] : [],
+                var.deepinfra_api_key != "" ? [
+                  {
+                    name = "DEEPINFRA_API_KEY"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name     = "opencode-llm-keys"
+                        key      = "DEEPINFRA_API_KEY"
                         optional = true
                       }
                     }

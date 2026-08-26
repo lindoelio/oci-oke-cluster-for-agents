@@ -388,6 +388,19 @@ variable "opencode_version" {
   default     = "1.17.13"
 }
 
+variable "opencode_admin_password" {
+  description = "Operator-chosen password for the OpenCode Web basic auth (username 'opencode'); empty falls back to the generated random_password"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "enable_opencode_browser" {
+  description = "Give OpenCode Web agents browser automation: cdp-forward sidecar to the paperclip-browser service (requires enable_paperclip_browser) plus the playwright client library provisioned onto the PVC"
+  type        = bool
+  default     = true
+}
+
 variable "opencode_custom_domain" {
   description = "Custom domain for OpenCode Web (e.g., 'opencode.example.com'). If set, HTTPS + Let's Encrypt is enabled when letsencrypt_email is also set."
   type        = string

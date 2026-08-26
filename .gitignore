@@ -52,6 +52,7 @@ kubeconfig
 # Terraform plan files
 tfplan
 *.tfplan
+tfplan.*
 
 # Specs
 .specs

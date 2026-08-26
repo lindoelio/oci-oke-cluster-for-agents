@@ -113,6 +113,33 @@ RUN useradd -m -s /bin/bash opencode && \
     mkdir -p /home/opencode/.config && \
     chown -R opencode:opencode /home/opencode
 
+# Default permissions: agents run without per-action approval prompts
+# (the web UI's "always allow" toggle is disabled unless set server-side).
+RUN mkdir -p /home/opencode/.config/opencode && \
+    printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "permission": "allow"\n}\n' > /home/opencode/.config/opencode/opencode.json && \
+    chown -R opencode:opencode /home/opencode/.config
+
+# Global agent instructions: browser automation via the shared cluster
+# browser (CDP at localhost:9222, forwarded by the cdp-forward sidecar).
+RUN printf '%s\n' \
+    '## Browser automation (headless Chromium)' \
+    '' \
+    'A cluster-hosted headless Chromium is available at' \
+    'http://localhost:9222 (CDP; env OPENCODE_BROWSER_CDP). The playwright' \
+    'client library is preinstalled; connect with:' \
+    '' \
+    '```js' \
+    'const { chromium } = require("playwright");' \
+    'const browser = await chromium.connectOverCDP("http://localhost:9222");' \
+    'const page = await browser.newPage();' \
+    '```' \
+    '' \
+    'Never install chromium binaries or apt packages for browser work —' \
+    'they do not persist and lack system libs in this container. Close the' \
+    'browser when done; it is shared and stateless across sessions.' \
+    > /home/opencode/.config/opencode/AGENTS.md && \
+    chown opencode:opencode /home/opencode/.config/opencode/AGENTS.md
+
 USER opencode
 WORKDIR /home/opencode
 

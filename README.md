@@ -231,6 +231,7 @@ kubectl get certificate -n paperclip # TLS cert (if custom domain configured)
 | `enable_paperclip` | Deploy Paperclip with managed PostgreSQL | `true` |
 | `enable_openclaw` | Deploy OpenClaw operator + instance | `true` |
 | `enable_opencode` | Deploy OpenCode Web (built from upstream tarball) | `true` |
+| `enable_qwen` | Deploy Qwen Code Web (optional; off by default) | `false` |
 
 ### Paperclip
 

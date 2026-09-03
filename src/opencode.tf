@@ -88,7 +88,7 @@ resource "kubectl_manifest" "opencode_auth_secret" {
     }
     type = "Opaque"
     stringData = {
-      OPENCODE_SERVER_PASSWORD = random_password.opencode_admin[count.index].result
+      OPENCODE_SERVER_PASSWORD = var.opencode_admin_password != "" ? var.opencode_admin_password : random_password.opencode_admin[count.index].result
     }
   }
 }
@@ -274,7 +274,7 @@ resource "kubectl_manifest" "opencode_deployment" {
           securityContext = {
             fsGroup = 1000
           }
-          initContainers = var.opencode_go_api_key != "" ? [
+          initContainers = concat(var.opencode_go_api_key != "" ? [
             {
               name    = "opencode-go-auth"
               image   = docker_image.opencode[count.index].name
@@ -320,8 +320,45 @@ resource "kubectl_manifest" "opencode_deployment" {
                 }
               }
             }
-          ] : []
-          containers = [
+            ] : [], var.enable_opencode_browser ? [
+            {
+              # Playwright client library on the PVC (the browsers live in the
+              # shared paperclip-browser service; the client connects over CDP).
+              # Version pinned to paperclip_browser_version for client/server match.
+              name    = "browser-setup"
+              image   = docker_image.opencode[count.index].name
+              command = ["sh", "-c"]
+              args = [
+                <<-EOT
+                set -e
+                if [ "$(cat /home/opencode/.playwright/.version 2>/dev/null)" = "${var.paperclip_browser_version}" ]; then
+                  echo "playwright ${var.paperclip_browser_version} already installed"
+                  exit 0
+                fi
+                npm install --prefix /home/opencode/.playwright playwright@${var.paperclip_browser_version}
+                echo "${var.paperclip_browser_version}" > /home/opencode/.playwright/.version
+                EOT
+              ]
+              volumeMounts = [
+                {
+                  name      = "opencode-data"
+                  mountPath = "/home/opencode/.playwright"
+                  subPath   = "playwright"
+                }
+              ]
+              resources = {
+                requests = {
+                  cpu    = "50m"
+                  memory = "128Mi"
+                }
+                limits = {
+                  cpu    = "500m"
+                  memory = "512Mi"
+                }
+              }
+            }
+          ] : [])
+          containers = concat([
             {
               name            = "opencode"
               image           = docker_image.opencode[count.index].name
@@ -346,6 +383,28 @@ resource "kubectl_manifest" "opencode_deployment" {
                   {
                     name  = "OPENCODE_SERVER_USERNAME"
                     value = "opencode"
+                  },
+                  {
+                    # Headless container: stops opencode from trying to spawn
+                    # xdg-open at startup (ENOENT crash on some releases).
+                    name  = "BROWSER"
+                    value = "none"
+                  },
+                  {
+                    # Browser automation via the shared paperclip-browser
+                    # service; the cdp-forward sidecar exposes it at
+                    # localhost:9222 for tools that assume a local Chrome.
+                    name  = "OPENCODE_BROWSER_CDP"
+                    value = "http://localhost:9222"
+                  },
+                  {
+                    # Playwright client installed on the PVC by browser-setup.
+                    name  = "NODE_PATH"
+                    value = "/home/opencode/.playwright/node_modules"
+                  },
+                  {
+                    name  = "PATH"
+                    value = "/home/opencode/.playwright/node_modules/.bin:/opt/google-cloud-sdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
                   },
                   {
                     # The kubelet creates the volume mount's intermediate dirs as root,
@@ -576,10 +635,55 @@ resource "kubectl_manifest" "opencode_deployment" {
                 {
                   name      = "opencode-data"
                   mountPath = "/home/opencode/.local/share/opencode"
+                },
+                {
+                  # Project workspaces live on the PVC so sessions survive
+                  # image rebuilds (the image layer is ephemeral).
+                  name      = "opencode-data"
+                  mountPath = "/home/opencode/workspace"
+                  subPath   = "workspaces"
+                },
+                {
+                  name      = "opencode-data"
+                  mountPath = "/home/opencode/.playwright"
+                  subPath   = "playwright"
                 }
               ]
             }
-          ]
+            ], var.enable_opencode_browser ? [
+            {
+              # Shares the pod netns: tools inside the main container that
+              # expect a LOCAL Chrome CDP endpoint find it at 127.0.0.1:9222,
+              # forwarded to the shared paperclip-browser service.
+              name    = "cdp-forward"
+              image   = docker_image.opencode[count.index].name
+              command = ["node", "-e", file("${path.module}/scripts/cdp_proxy.js")]
+              env = [
+                {
+                  name  = "CDP_TARGET_HOST"
+                  value = "paperclip-browser.paperclip.svc.cluster.local"
+                },
+                {
+                  name  = "CDP_TARGET_PORT"
+                  value = "9222"
+                },
+                {
+                  name  = "CDP_LISTEN_PORT"
+                  value = "9222"
+                }
+              ]
+              resources = {
+                requests = {
+                  cpu    = "10m"
+                  memory = "32Mi"
+                }
+                limits = {
+                  cpu    = "200m"
+                  memory = "128Mi"
+                }
+              }
+            }
+          ] : [])
           volumes = [
             {
               name = "opencode-data"

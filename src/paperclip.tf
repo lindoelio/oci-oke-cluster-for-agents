@@ -558,7 +558,7 @@ resource "kubectl_manifest" "paperclip_deployment" {
           containers = [
             {
               # Shares the pod netns: tools inside the main container that
-              # expect a LOCAL Chrome CDP endpoint (browser-harness et al.)
+              # expect a LOCAL Chrome CDP endpoint
               # find it at 127.0.0.1:9222, forwarded to the browser service.
               name    = "cdp-forward"
               image   = "${var.paperclip_image_repository}:${var.paperclip_image_tag}"

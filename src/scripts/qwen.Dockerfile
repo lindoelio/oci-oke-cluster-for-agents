@@ -1,38 +1,17 @@
 ################################################################################
-# OpenCode Dockerfile — Full Developer Environment
-# python:3.12-slim base with bash, git, gh CLI, gcloud, firebase, Node.js 24 LTS
+# QwenCode Dockerfile — Full Developer Environment (qwen serve)
+# ubuntu:24.04 base with bash, git, gh CLI, gcloud, firebase, Node.js 24 LTS
 ################################################################################
 
-ARG OPENCODE_VERSION
-
-################################################################################
-# Builder stage — download opencode binary
-################################################################################
-
-FROM --platform=linux/arm64 python:3.12.13-slim AS builder
-
-ARG OPENCODE_VERSION
-ENV OPENCODE_VERSION="${OPENCODE_VERSION}"
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl \
-    tar \
-    xz-utils \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN curl -fsSL \
-    "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-arm64.tar.gz" \
-    -o /tmp/opencode.tar.gz \
-    && mkdir -p /opt/opencode \
-    && tar -xzf /tmp/opencode.tar.gz -C /opt/opencode \
-    && chmod +x /opt/opencode/opencode
+ARG QWEN_VERSION
 
 ################################################################################
 # Final stage — Full developer environment
 ################################################################################
 
 FROM --platform=linux/arm64 ubuntu:24.04
+
+ARG QWEN_VERSION
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -60,6 +39,9 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
 
 # Upgrade npm and install pnpm latest
 RUN npm install -g npm@latest pnpm@latest
+
+# Install Qwen Code CLI (qwen serve ships in this package)
+RUN npm install -g @qwen-code/qwen-code@${QWEN_VERSION}
 
 # Install optional CLIs: GitLab glab, Neon neonctl, Expo eas-cli (ARM64)
 RUN curl -fsSL "https://gitlab.com/gitlab-org/cli/-/releases/v1.114.0/downloads/glab_1.114.0_linux_arm64.tar.gz" -o /tmp/glab.tar.gz \
@@ -105,45 +87,41 @@ RUN pip3 install --break-system-packages --no-cache-dir \
     httpx \
     pydantic
 
-# Copy opencode binary from builder
-COPY --from=builder /opt/opencode/opencode /usr/local/bin/opencode
-
 # Create non-root user with home directory and bash shell
-RUN useradd -m -s /bin/bash opencode && \
-    mkdir -p /home/opencode/.config && \
-    chown -R opencode:opencode /home/opencode
+RUN useradd -m -s /bin/bash qwen && \
+    mkdir -p /home/qwen/.qwen && \
+    chown -R qwen:qwen /home/qwen
 
-# Default permissions: agents run without per-action approval prompts
-# (the web UI's "always allow" toggle is disabled unless set server-side).
-RUN mkdir -p /home/opencode/.config/opencode && \
-    printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "permission": "allow"\n}\n' > /home/opencode/.config/opencode/opencode.json && \
-    chown -R opencode:opencode /home/opencode/.config
+# Base settings: model providers via env keys (credentials are never baked
+# into the image; the runtime reads process.env[envKey]). Seeded into the
+# state volume by the qwen-config initContainer on first boot.
+COPY scripts/qwen-settings.json /usr/local/share/qwen-settings.json
 
-# Global agent instructions: browser automation via the shared cluster
-# browser (CDP at localhost:9222, forwarded by the cdp-forward sidecar).
+# Global agent context: browser automation + cost discipline.
 RUN printf '%s\n' \
     '## Browser automation (headless Chromium)' \
     '' \
-    'A cluster-hosted headless Chromium is available at' \
-    'http://localhost:9222 (CDP; env OPENCODE_BROWSER_CDP). The playwright' \
-    'client library is preinstalled; connect with:' \
+    'A cluster-hosted headless Chromium is available at http://localhost:9222' \
+    '(CDP; env QWEN_BROWSER_CDP). Connect with a CDP client (playwright):' \
     '' \
     '```js' \
     'const { chromium } = require("playwright");' \
     'const browser = await chromium.connectOverCDP("http://localhost:9222");' \
-    'const page = await browser.newPage();' \
     '```' \
     '' \
-    'Never install chromium binaries or apt packages for browser work —' \
-    'they do not persist and lack system libs in this container. Close the' \
-    'browser when done; it is shared and stateless across sessions.' \
-    > /home/opencode/.config/opencode/AGENTS.md && \
-    chown opencode:opencode /home/opencode/.config/opencode/AGENTS.md
+    'Never install chromium binaries or apt packages for browser work — they do' \
+    'not persist and lack system libs in this container.' \
+    '' \
+    '## Cost discipline' \
+    '' \
+    'Keep runs terse, stop early when blocked, at most one retry on provider' \
+    'errors; never change model configuration yourself.' \
+    > /usr/local/share/qwen-QWEN.md
 
-USER opencode
-WORKDIR /home/opencode
+USER qwen
+WORKDIR /home/qwen
 
-EXPOSE 4096
+EXPOSE 4170
 
-ENTRYPOINT ["opencode"]
-CMD ["web", "--hostname", "0.0.0.0", "--port", "4096"]
+ENTRYPOINT ["qwen"]
+CMD ["serve", "--hostname", "0.0.0.0", "--port", "4170"]

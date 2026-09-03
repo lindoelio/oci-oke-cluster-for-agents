@@ -52,6 +52,7 @@ kubeconfig
 # Terraform plan files
 tfplan
 *.tfplan
+tfplan.*
 
 # Specs
 .specs
@@ -64,5 +65,7 @@ src/.tmp/
 src/300
 
 # Scripts (contain generated configs and secrets)
-src/scripts/
+src/scripts/*
 !src/scripts/opencode.Dockerfile
+!src/scripts/qwen.Dockerfile
+!src/scripts/qwen-settings.json

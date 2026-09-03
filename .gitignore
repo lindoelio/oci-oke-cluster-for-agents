@@ -18,6 +18,7 @@ crash.*.log
 
 # But keep the example file
 !terraform.tfvars.example
+!src/terraform.tfvars.example
 
 # Ignore override files as they are usually used to override resources locally
 override.tf
@@ -64,8 +65,15 @@ src/.tmp/
 # Stray curl cookie jar (session cookies — never commit)
 src/300
 
-# Scripts (contain generated configs and secrets)
+# Operator-only scripts (secrets, company wiring). Terraform helpers below
+# are tracked because `terraform apply` reads them from this directory.
 src/scripts/*
 !src/scripts/opencode.Dockerfile
 !src/scripts/qwen.Dockerfile
 !src/scripts/qwen-settings.json
+!src/scripts/detect_ingress_ip.py
+!src/scripts/cdp_proxy.js
+!src/scripts/paperclip_onboard.sh
+!src/scripts/company_auth_writer.js
+!src/scripts/opencode_go_auth.py
+!src/scripts/gen_qwen_htpasswd.sh

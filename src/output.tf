@@ -103,6 +103,10 @@ output "post_deploy_instructions" {
     "   - Wait for the pod to be Ready: kubectl get pods -n opencode",
     "   - OpenCode Web auto-starts the `opencode web` server on first boot.",
     "   - When `opencode_custom_domain` is set but `letsencrypt_email` is empty, OpenCode serves over HTTP (no TLS). Set `letsencrypt_email` to enable Let's Encrypt for the custom domain.",
+    "",
+    "7. Qwen Code Web (only if enable_qwen = true):",
+    "   - Generate Ingress basic auth before apply: sh scripts/gen_qwen_htpasswd.sh '<password>'",
+    "   - Wait for the pod: kubectl get pods -n qwen",
   ])
 }
 

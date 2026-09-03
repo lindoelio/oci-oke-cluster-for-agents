@@ -10,4 +10,5 @@ code.
 - Keep feature validation local. A branch, pull request, or `main` update
   must not create remote builds or infrastructure previews.
 - Do not add private company identity, product stacks, or proprietary
-  harnesses to this repository.
+  harnesses.
+- Write docs and comments in English.

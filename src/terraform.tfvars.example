@@ -1,5 +1,5 @@
 # =============================================================================
-# OKE Cluster with Paperclip + OpenClaw + OpenCode Web — Example Terraform Variables
+# OKE cluster with Paperclip, OpenClaw, OpenCode Web, and optional Qwen Code.
 # Copy this file to terraform.tfvars and fill in your values:
 #   cp terraform.tfvars.example terraform.tfvars
 # =============================================================================
@@ -28,9 +28,11 @@ oci_oke_node_pool_size           = 2
 oci_oke_node_shape_ocpus         = 2
 oci_oke_node_shape_memory_in_gbs = 12
 
-# --- App Toggles ---
+# --- App toggles ---
 enable_paperclip = true
 enable_openclaw  = true
+enable_opencode  = true
+# enable_qwen    = false   # optional Qwen Code Web; requires scripts/gen_qwen_htpasswd.sh
 
 # --- Paperclip (Agent Orchestration UI) ---
 # Paperclip is deployed directly (no operator) with a managed PostgreSQL
@@ -73,8 +75,7 @@ paperclip_exposure          = "public"  # "public" = LoadBalancer, "private" = C
 # paddle_sandbox_api_key    = "..."         # Paddle sandbox key for paddle-sandbox MCP
 
 # --- OpenCode Web (Agent Interface) ---
-# OpenCode Web is deployed directly from the upstream ARM64 release tarball
-enable_opencode = true
+# OpenCode Web is built from the upstream ARM64 release tarball
 opencode_exposure = "public"  # "public" = Ingress + NGINX, "private" = ClusterIP only
 # opencode_custom_domain = "opencode.example.com"  # Enables HTTPS + Let's Encrypt
 # opencode_path_prefix   = "/opencode"  # Ingress path prefix when using custom domain or IP fallback
@@ -96,7 +97,7 @@ opencode_exposure = "public"  # "public" = Ingress + NGINX, "private" = ClusterI
 
 # --- OpenClaw (Agent Runtime) ---
 # OpenClaw is deployed via the openclaw-operator Helm chart
-# openclaw_chart_version     = "0.36.5"
+# openclaw_chart_version     = "0.36.5"  # default in variables.tf
 # openclaw_image_repository  = "ghcr.io/openclaw/openclaw"
 # openclaw_image_tag         = "latest"
 openclaw_llm_provider    = "openrouter"
@@ -109,5 +110,5 @@ openclaw_llm_api_key     = "your-llm-api-key-here"
 # Telegram integration (optional)
 openclaw_telegram_enabled   = true
 openclaw_telegram_bot_token = "123456:ABC-DEF..."
-# openclaw_telegram_owner_id = "8547618136"  # Your Telegram numeric user ID for auto-approval
-# deepinfra_api_key = "..."  # DeepInfra (OpenAI-compatible) — default provider models for both companies
+# openclaw_telegram_owner_id = "123456789"  # Telegram numeric user ID for auto-approval
+# deepinfra_api_key = "..."  # DeepInfra (OpenAI-compatible) keys for agent models

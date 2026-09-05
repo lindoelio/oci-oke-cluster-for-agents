@@ -30,6 +30,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-venv \
     python3-dev \
     build-essential \
+    sudo \
+    pkg-config \
+    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js 24 LTS
@@ -87,11 +90,32 @@ RUN pip3 install --break-system-packages --no-cache-dir \
     httpx \
     pydantic
 
+# Go toolchain (latest stable at build time; arch follows the build platform)
+RUN GO_VERSION=$(curl -fsSL 'https://go.dev/VERSION?m=text' | head -n1) \
+    && curl -fsSL "https://go.dev/dl/${GO_VERSION}.linux-$(dpkg --print-architecture).tar.gz" -o /tmp/go.tgz \
+    && tar -C /usr/local -xzf /tmp/go.tgz \
+    && rm /tmp/go.tgz
+
+# Rust toolchain in a shared location so the non-root runtime user can use it
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo
+RUN curl -fsSL https://sh.rustup.rs -o /tmp/rustup.sh \
+    && sh /tmp/rustup.sh -y --profile minimal --default-toolchain stable \
+    && rm /tmp/rustup.sh \
+    && chmod -R a+rX /usr/local/rustup /usr/local/cargo
+
+ENV PATH="/usr/local/cargo/bin:/usr/local/go/bin:${PATH}"
+
 # Create non-root user with home directory and bash shell
 RUN useradd -m -s /bin/bash qwen && \
     mkdir -p /home/qwen/.qwen /home/qwen/projects && \
     ln -s /home/qwen/projects/sandbox /home/qwen/workspace && \
     chown -R qwen:qwen /home/qwen
+
+# Agents may need to install or configure extra development tooling at
+# runtime; the container is a disposable sandbox, so allow passwordless sudo.
+RUN echo 'qwen ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/qwen && \
+    chmod 440 /etc/sudoers.d/qwen
 
 # Base settings: model providers via env keys (credentials are never baked
 # into the image; the runtime reads process.env[envKey]). Seeded into the

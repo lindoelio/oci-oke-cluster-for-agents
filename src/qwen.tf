@@ -267,6 +267,17 @@ resource "kubectl_manifest" "qwen_deployment" {
                 if [ -d /home/qwen/.qwen/scratch-workspaces ]; then
                   chmod 700 /home/qwen/.qwen/scratch-workspaces
                 fi
+                # The Conversations lease dir must be private to the daemon
+                # uid. It only holds per-instance lease/lock files, so drop it
+                # when a previous run left it in an unsafe mode and let the
+                # daemon re-claim it cleanly.
+                if [ -d /home/qwen/.qwen/conversations ]; then
+                  mode=$(stat -c %a /home/qwen/.qwen/conversations)
+                  case "$mode" in
+                    700|2700) : ;;
+                    *) rm -rf /home/qwen/.qwen/conversations ;;
+                  esac
+                fi
                 EOT
               ]
               securityContext = {
@@ -330,6 +341,9 @@ resource "kubectl_manifest" "qwen_deployment" {
             {
               # Seeds base settings.json + QWEN.md into the state volume on
               # first boot; later edits made at runtime are preserved.
+              # Provider/permission sections are re-synced from the image on
+              # every boot so the repository stays the source of truth for
+              # them; model selection and other runtime keys are untouched.
               name    = "qwen-config"
               image   = docker_image.qwen[count.index].name
               command = ["sh", "-c"]
@@ -339,6 +353,16 @@ resource "kubectl_manifest" "qwen_deployment" {
                 [ -f /home/qwen/.qwen/settings.json ] || cp /usr/local/share/qwen-settings.json /home/qwen/.qwen/settings.json
                 [ -f /home/qwen/.qwen/QWEN.md ] || cp /usr/local/share/qwen-QWEN.md /home/qwen/.qwen/QWEN.md
                 mkdir -p /home/qwen/projects/sandbox
+                python3 - <<'PY'
+import json
+pvc = "/home/qwen/.qwen/settings.json"
+seed = json.load(open("/usr/local/share/qwen-settings.json"))
+cur = json.load(open(pvc))
+for key in ("modelProviders", "permissions", "agents", "fastModel"):
+    if key in seed:
+        cur[key] = seed[key]
+json.dump(cur, open(pvc, "w"), indent=2)
+PY
                 EOT
               ]
               volumeMounts = [
@@ -422,7 +446,7 @@ resource "kubectl_manifest" "qwen_deployment" {
                   },
                   {
                     name  = "PATH"
-                    value = "/home/qwen/.playwright/node_modules/.bin:/opt/google-cloud-sdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+                    value = "/home/qwen/.playwright/node_modules/.bin:/usr/local/cargo/bin:/usr/local/go/bin:/opt/google-cloud-sdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
                   }
                 ],
                 [for k in ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "OLLAMA_CLOUD_API_KEY", "DEEPINFRA_API_KEY", "ALIBABA_TOKEN_PLAN_API_KEY"] : {

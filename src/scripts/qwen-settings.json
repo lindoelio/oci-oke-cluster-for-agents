@@ -6,30 +6,182 @@
     }
   },
   "model": {
-    "name": "deepseek-v4-flash-0731",
+    "name": "qwen3.8-flash",
     "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+  },
+  "fastModel": "openai:inclusionAI/Ling-3.0-flash",
+  "permissions": {
+    "defaultMode": "yolo",
+    "allow": [
+      "Skill(qc-helper)"
+    ]
+  },
+  "agents": {
+    "modelGrades": {
+      "small": "fast"
+    },
+    "builtin": {
+      "exploreModel": "openai:inclusionAI/Ling-3.0-flash"
+    }
   },
   "modelProviders": {
     "openai": [
-      { "id": "qwen/qwen3.8-27b", "name": "[OpenRouter] qwen/qwen3.8-27b", "envKey": "OPENROUTER_API_KEY", "baseUrl": "https://openrouter.ai/api/v1" },
-      { "id": "qwen/qwen3.7-flash", "name": "[OpenRouter] qwen/qwen3.7-flash", "envKey": "OPENROUTER_API_KEY", "baseUrl": "https://openrouter.ai/api/v1" },
-      { "id": "deepseek/deepseek-v4-pro-0813", "name": "[OpenRouter] deepseek/deepseek-v4-pro-0813", "envKey": "OPENROUTER_API_KEY", "baseUrl": "https://openrouter.ai/api/v1" },
-      { "id": "deepseek/deepseek-v4-flash-vision-exp", "name": "[OpenRouter] deepseek/deepseek-v4-flash-vision-exp", "envKey": "OPENROUTER_API_KEY", "baseUrl": "https://openrouter.ai/api/v1" },
-      { "id": "google/gemini-3.7-flash", "name": "[OpenRouter] google/gemini-3.7-flash", "envKey": "OPENROUTER_API_KEY", "baseUrl": "https://openrouter.ai/api/v1" },
-      { "id": "inclusionai/ling-3.0-flash", "name": "[OpenRouter] inclusionai/ling-3.0-flash", "envKey": "OPENROUTER_API_KEY", "baseUrl": "https://openrouter.ai/api/v1" },
-      { "id": "z-ai/glm-5.2", "name": "[OpenRouter] z-ai/glm-5.2", "envKey": "OPENROUTER_API_KEY", "baseUrl": "https://openrouter.ai/api/v1" },
-      { "id": "xiaomi/mimo-v2.5-pro", "name": "[OpenRouter] xiaomi/mimo-v2.5-pro", "envKey": "OPENROUTER_API_KEY", "baseUrl": "https://openrouter.ai/api/v1" },
-      { "id": "xiaomi/mimo-v2.5", "name": "[OpenRouter] xiaomi/mimo-v2.5", "envKey": "OPENROUTER_API_KEY", "baseUrl": "https://openrouter.ai/api/v1" },
-      { "id": "zai-org/GLM-5.2", "name": "[DeepInfra] zai-org/GLM-5.2", "envKey": "DEEPINFRA_API_KEY", "baseUrl": "https://api.deepinfra.com/v1/openai" },
-      { "id": "deepseek-ai/DeepSeek-V4-Pro-0813", "name": "[DeepInfra] deepseek-ai/DeepSeek-V4-Pro-0813", "envKey": "DEEPINFRA_API_KEY", "baseUrl": "https://api.deepinfra.com/v1/openai" },
-      { "id": "deepseek-ai/DeepSeek-V4-Flash-0731", "name": "[DeepInfra] deepseek-ai/DeepSeek-V4-Flash-0731", "envKey": "DEEPINFRA_API_KEY", "baseUrl": "https://api.deepinfra.com/v1/openai" },
-      { "id": "deepseek-v4-pro-0813", "name": "[Token Plan] DeepSeek V4 Pro", "envKey": "ALIBABA_TOKEN_PLAN_API_KEY", "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1" },
-      { "id": "deepseek-v4-flash-0731", "name": "[Token Plan] DeepSeek V4 Flash", "envKey": "ALIBABA_TOKEN_PLAN_API_KEY", "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1" },
-      { "id": "glm-5.2", "name": "[Token Plan] GLM 5.2", "envKey": "ALIBABA_TOKEN_PLAN_API_KEY", "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1" },
-      { "id": "qwen3.8-max", "name": "[Token Plan] Qwen 3.8 Max", "envKey": "ALIBABA_TOKEN_PLAN_API_KEY", "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1" },
-      { "id": "qwen3.7-max", "name": "[Token Plan] Qwen 3.7 Max", "envKey": "ALIBABA_TOKEN_PLAN_API_KEY", "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1" },
-      { "id": "qwen3.7-plus", "name": "[Token Plan] Qwen 3.7 Plus", "envKey": "ALIBABA_TOKEN_PLAN_API_KEY", "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1" },
-      { "id": "qwen3.8-flash", "name": "[Token Plan] Qwen 3.8 Flash", "envKey": "ALIBABA_TOKEN_PLAN_API_KEY", "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1" }
+      {
+        "id": "qwen/qwen3.8-27b",
+        "name": "[OpenRouter] qwen/qwen3.8-27b",
+        "envKey": "OPENROUTER_API_KEY",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "HTTP-Referer": "https://github.com/QwenLM/qwen-code.git",
+            "X-OpenRouter-Title": "Qwen Code"
+          }
+        }
+      },
+      {
+        "id": "deepseek/deepseek-v4-pro-0813",
+        "name": "[OpenRouter] deepseek/deepseek-v4-pro-0813",
+        "envKey": "OPENROUTER_API_KEY",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "HTTP-Referer": "https://github.com/QwenLM/qwen-code.git",
+            "X-OpenRouter-Title": "Qwen Code"
+          }
+        }
+      },
+      {
+        "id": "deepseek/deepseek-v4-flash-vision-exp",
+        "name": "[OpenRouter] deepseek/deepseek-v4-flash-vision-exp",
+        "envKey": "OPENROUTER_API_KEY",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "HTTP-Referer": "https://github.com/QwenLM/qwen-code.git",
+            "X-OpenRouter-Title": "Qwen Code"
+          }
+        }
+      },
+      {
+        "id": "google/gemini-3.7-flash",
+        "name": "[OpenRouter] google/gemini-3.7-flash",
+        "envKey": "OPENROUTER_API_KEY",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "HTTP-Referer": "https://github.com/QwenLM/qwen-code.git",
+            "X-OpenRouter-Title": "Qwen Code"
+          }
+        }
+      },
+      {
+        "id": "inclusionai/ling-3.0-flash",
+        "name": "[OpenRouter] inclusionai/ling-3.0-flash",
+        "envKey": "OPENROUTER_API_KEY",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "HTTP-Referer": "https://github.com/QwenLM/qwen-code.git",
+            "X-OpenRouter-Title": "Qwen Code"
+          }
+        }
+      },
+      {
+        "id": "z-ai/glm-5.2",
+        "name": "[OpenRouter] z-ai/glm-5.2",
+        "envKey": "OPENROUTER_API_KEY",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "HTTP-Referer": "https://github.com/QwenLM/qwen-code.git",
+            "X-OpenRouter-Title": "Qwen Code"
+          }
+        }
+      },
+      {
+        "id": "xiaomi/mimo-v2.5-pro",
+        "name": "[OpenRouter] xiaomi/mimo-v2.5-pro",
+        "envKey": "OPENROUTER_API_KEY",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "HTTP-Referer": "https://github.com/QwenLM/qwen-code.git",
+            "X-OpenRouter-Title": "Qwen Code"
+          }
+        }
+      },
+      {
+        "id": "xiaomi/mimo-v2.5",
+        "name": "[OpenRouter] xiaomi/mimo-v2.5",
+        "envKey": "OPENROUTER_API_KEY",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "HTTP-Referer": "https://github.com/QwenLM/qwen-code.git",
+            "X-OpenRouter-Title": "Qwen Code"
+          }
+        }
+      },
+      {
+        "id": "zai-org/GLM-5.2",
+        "name": "[DeepInfra] zai-org/GLM-5.2",
+        "envKey": "DEEPINFRA_API_KEY",
+        "baseUrl": "https://api.deepinfra.com/v1/openai"
+      },
+      {
+        "id": "deepseek-ai/DeepSeek-V4-Pro-0813",
+        "name": "[DeepInfra] deepseek-ai/DeepSeek-V4-Pro-0813",
+        "envKey": "DEEPINFRA_API_KEY",
+        "baseUrl": "https://api.deepinfra.com/v1/openai"
+      },
+      {
+        "id": "deepseek-ai/DeepSeek-V4-Flash-0731",
+        "name": "[DeepInfra] deepseek-ai/DeepSeek-V4-Flash-0731",
+        "envKey": "DEEPINFRA_API_KEY",
+        "baseUrl": "https://api.deepinfra.com/v1/openai"
+      },
+      {
+        "id": "zai-org/GLM-5.3-Flash",
+        "name": "[DeepInfra] zai-org/GLM-5.3-Flash",
+        "envKey": "DEEPINFRA_API_KEY",
+        "baseUrl": "https://api.deepinfra.com/v1/openai"
+      },
+      {
+        "id": "inclusionAI/Ling-3.0-flash",
+        "name": "[DeepInfra] inclusionAI/Ling-3.0-flash",
+        "envKey": "DEEPINFRA_API_KEY",
+        "baseUrl": "https://api.deepinfra.com/v1/openai"
+      },
+      {
+        "id": "deepseek-v4-pro-0813",
+        "name": "[Token Plan] DeepSeek V4 Pro",
+        "envKey": "ALIBABA_TOKEN_PLAN_API_KEY",
+        "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+      },
+      {
+        "id": "deepseek-v4-flash-0731",
+        "name": "[Token Plan] DeepSeek V4 Flash",
+        "envKey": "ALIBABA_TOKEN_PLAN_API_KEY",
+        "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+      },
+      {
+        "id": "glm-5.2",
+        "name": "[Token Plan] GLM 5.2",
+        "envKey": "ALIBABA_TOKEN_PLAN_API_KEY",
+        "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+      },
+      {
+        "id": "qwen3.8-max",
+        "name": "[Token Plan] Qwen 3.8 Max",
+        "envKey": "ALIBABA_TOKEN_PLAN_API_KEY",
+        "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+      },
+      {
+        "id": "qwen3.8-flash",
+        "name": "[Token Plan] Qwen 3.8 Flash",
+        "envKey": "ALIBABA_TOKEN_PLAN_API_KEY",
+        "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+      }
     ]
   }
 }

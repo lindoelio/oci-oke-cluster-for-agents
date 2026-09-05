@@ -157,6 +157,7 @@ resource "kubectl_manifest" "qwen_llm_keys_secret" {
       var.ollama_cloud_api_key != "" ? { OLLAMA_CLOUD_API_KEY = var.ollama_cloud_api_key } : {},
       var.deepinfra_api_key != "" ? { DEEPINFRA_API_KEY = var.deepinfra_api_key } : {},
       var.alibaba_token_plan_api_key != "" ? { ALIBABA_TOKEN_PLAN_API_KEY = var.alibaba_token_plan_api_key } : {},
+      var.opencode_go_api_key != "" ? { OPENCODE_GO_API_KEY = var.opencode_go_api_key } : {},
     )
   }
 }
@@ -259,6 +260,10 @@ resource "kubectl_manifest" "qwen_deployment" {
               # it as root before the daemon starts.
               name    = "volume-ownership"
               image   = docker_image.qwen[count.index].name
+              # The tag is repushed in place, so every container that runs
+              # this image must always pull (init containers default to
+              # IfNotPresent and would seed from a stale image).
+              imagePullPolicy = "Always"
               command = ["sh", "-c"]
               args = [
                 <<-EOT
@@ -307,6 +312,7 @@ resource "kubectl_manifest" "qwen_deployment" {
               # shared paperclip-browser service; the client connects over CDP).
               name    = "browser-setup"
               image   = docker_image.qwen[count.index].name
+              imagePullPolicy = "Always"
               command = ["sh", "-c"]
               args = [
                 <<-EOT
@@ -346,6 +352,7 @@ resource "kubectl_manifest" "qwen_deployment" {
               # them; model selection and other runtime keys are untouched.
               name    = "qwen-config"
               image   = docker_image.qwen[count.index].name
+              imagePullPolicy = "Always"
               command = ["sh", "-c"]
               args = [
                 <<-EOT
@@ -449,7 +456,7 @@ PY
                     value = "/home/qwen/.playwright/node_modules/.bin:/usr/local/cargo/bin:/usr/local/go/bin:/opt/google-cloud-sdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
                   }
                 ],
-                [for k in ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "OLLAMA_CLOUD_API_KEY", "DEEPINFRA_API_KEY", "ALIBABA_TOKEN_PLAN_API_KEY"] : {
+                [for k in ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "OLLAMA_CLOUD_API_KEY", "DEEPINFRA_API_KEY", "ALIBABA_TOKEN_PLAN_API_KEY", "OPENCODE_GO_API_KEY"] : {
                   name = k
                   valueFrom = {
                     secretKeyRef = {
@@ -531,6 +538,7 @@ PY
               # forwarded to the shared paperclip-browser service.
               name    = "cdp-forward"
               image   = docker_image.qwen[count.index].name
+              imagePullPolicy = "Always"
               command = ["node", "-e", file("${path.module}/scripts/cdp_proxy.js")]
               env = [
                 {

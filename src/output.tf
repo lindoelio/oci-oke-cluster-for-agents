@@ -36,29 +36,25 @@ output "project_compartment_name" {
 
 output "opencode_admin_password" {
   description = "Admin password for OpenCode Web HTTP Basic Auth"
-  value       = var.enable_opencode ? random_password.opencode_admin[0].result : null
+  value       = var.enable_opencode ? (var.opencode_admin_password != "" ? var.opencode_admin_password : random_password.opencode_admin[0].result) : null
   sensitive   = true
 }
 
 output "opencode_public_url" {
   description = "Current OpenCode Web access URL"
-  value = var.enable_opencode && var.opencode_exposure == "public" ? (
-    var.opencode_custom_domain != "" ? "https://${var.opencode_custom_domain}" : (
-      length(data.external.ingress_ip) > 0 ? "http://${data.external.ingress_ip[0].result["ip"]}${var.opencode_path_prefix}" : null
-    )
-  ) : null
+  value       = local.opencode_public ? "${local.opencode_tls ? "https" : "http"}://${var.opencode_custom_domain}" : null
 }
 
 output "paperclip_public_ip" {
-  description = "Public IP of the NGINX Ingress LoadBalancer (use this for DNS A records)"
+  description = "Public IP of the OCI Native Ingress Load Balancer (use this for DNS A records)"
   value       = var.enable_paperclip && var.paperclip_exposure == "public" && length(data.external.ingress_ip) > 0 ? data.external.ingress_ip[0].result["ip"] : null
 }
 
 output "paperclip_url" {
   description = "Current Paperclip access URL"
   value = var.enable_paperclip && var.paperclip_exposure == "public" ? (
-    var.paperclip_custom_domain != "" ? "https://${var.paperclip_custom_domain}" : (
-      var.paperclip_public_url != "" ? var.paperclip_public_url : (
+    var.paperclip_public_url != "" ? var.paperclip_public_url : (
+      var.paperclip_custom_domain != "" ? "${local.paperclip_tls ? "https" : "http"}://${var.paperclip_custom_domain}" : (
         length(data.external.ingress_ip) > 0 ? "http://${data.external.ingress_ip[0].result["ip"]}" : null
       )
     )
@@ -73,8 +69,8 @@ output "post_deploy_instructions" {
     "   oci ce cluster create-kubeconfig --cluster-id <cluster_id> --file $HOME/.kube/config --region ${var.oci_region} --token-version 2.0.0 --kube-endpoint PUBLIC_ENDPOINT",
     "",
     "2. Paperclip is accessible at:",
-    "   ${var.paperclip_custom_domain != "" && var.enable_paperclip && var.paperclip_exposure == "public" ? "https://${var.paperclip_custom_domain}" : (
-      var.paperclip_public_url != "" && var.enable_paperclip && var.paperclip_exposure == "public" ? var.paperclip_public_url : (
+    "   ${var.paperclip_public_url != "" && var.enable_paperclip && var.paperclip_exposure == "public" ? var.paperclip_public_url : (
+      var.paperclip_custom_domain != "" && var.enable_paperclip && var.paperclip_exposure == "public" ? "${local.paperclip_tls ? "https" : "http"}://${var.paperclip_custom_domain}" : (
         var.enable_paperclip && var.paperclip_exposure == "public" && length(data.external.ingress_ip) > 0 ? "http://${data.external.ingress_ip[0].result["ip"]}" : "Paperclip is not publicly exposed."
       )
     )}",
@@ -87,26 +83,22 @@ output "post_deploy_instructions" {
     "4. Custom domain (optional):",
     "   - Create an A record: ${var.paperclip_custom_domain != "" && var.enable_paperclip && var.paperclip_exposure == "public" ? var.paperclip_custom_domain : "your-domain.example.com"} → ${var.enable_paperclip && var.paperclip_exposure == "public" && length(data.external.ingress_ip) > 0 ? data.external.ingress_ip[0].result["ip"] : "<IP_from_step_2>"}",
     "   - Update terraform.tfvars: paperclip_custom_domain = \"${var.paperclip_custom_domain != "" ? var.paperclip_custom_domain : "your-domain.example.com"}\"",
-    "   - terraform apply (enables HTTPS with Let's Encrypt)",
+    "   - Set letsencrypt_email and point DNS at the ingress IP before applying TLS configuration.",
+    "   - Wait for the certificate to become Ready before using the HTTPS URL.",
     "",
     "5. OpenClaw:",
     "   - Paste the invite prompt into OpenClaw via Telegram or direct access",
     "   - Agents will appear in Paperclip dashboard",
     "",
     "6. OpenCode Web:",
-    "   ${var.enable_opencode && var.opencode_exposure == "public" ? (
-      var.opencode_custom_domain != "" ? "   - OpenCode Web is accessible at: https://${var.opencode_custom_domain}" : (
-        length(data.external.ingress_ip) > 0 ? "   - OpenCode Web is accessible at: http://${data.external.ingress_ip[0].result["ip"]}${var.opencode_path_prefix}" : "   - OpenCode Web public URL is pending (Ingress IP not yet assigned)."
-      )
-    ) : "   - OpenCode Web is not publicly exposed (set opencode_exposure = \"public\" to enable)."}",
+    "   ${local.opencode_public ? "   - OpenCode Web is accessible at: ${local.opencode_tls ? "https" : "http"}://${var.opencode_custom_domain}" : "   - OpenCode Web is not publicly exposed (public mode requires opencode_custom_domain)."}",
     "   - Password: (run `terraform output -raw opencode_admin_password` to capture it once)",
     "   - Wait for the pod to be Ready: kubectl get pods -n opencode",
     "   - OpenCode Web auto-starts the `opencode web` server on first boot.",
-    "   - When `opencode_custom_domain` is set but `letsencrypt_email` is empty, OpenCode serves over HTTP (no TLS). Set `letsencrypt_email` to enable Let's Encrypt for the custom domain.",
+    "   - When `letsencrypt_email` is empty, OpenCode serves over HTTP. Set it and point DNS at the Load Balancer before enabling HTTPS.",
     "",
     "7. Qwen Code Web (only if enable_qwen = true):",
     "   - Generate Ingress basic auth before apply: sh scripts/gen_qwen_htpasswd.sh '<password>'",
     "   - Wait for the pod: kubectl get pods -n qwen",
   ])
 }
-

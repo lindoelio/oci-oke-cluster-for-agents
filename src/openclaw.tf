@@ -241,9 +241,9 @@ resource "kubectl_manifest" "openclaw_instance" {
 
 ################################################################################
 # OpenClaw data PVC (created by the operator)
-# Declared here so that disabling OpenClaw also destroys the PVC and releases
-# its 50 GB block volume back to the Always Free storage quota. The operator
-# defaults to persistence.orphan=true, so it leaves the PVC alone on CR delete.
+# The operator defaults to persistence.orphan=true, so it leaves this PVC on
+# CR deletion. After import, disabling OpenClaw plans to delete the PVC from
+# Terraform. Review its data and the backing volume's reclaim policy first.
 # Imported once with:
 #   terraform import 'kubectl_manifest.openclaw_data_pvc[0]' \
 #     'v1//PersistentVolumeClaim//<prefix>-openclaw-data//openclaw'

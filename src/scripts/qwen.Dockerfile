@@ -9,7 +9,7 @@ ARG QWEN_VERSION
 # Final stage — Full developer environment
 ################################################################################
 
-FROM --platform=linux/arm64 ubuntu:24.04
+FROM ubuntu:24.04
 
 ARG QWEN_VERSION
 
@@ -89,7 +89,8 @@ RUN pip3 install --break-system-packages --no-cache-dir \
 
 # Create non-root user with home directory and bash shell
 RUN useradd -m -s /bin/bash qwen && \
-    mkdir -p /home/qwen/.qwen && \
+    mkdir -p /home/qwen/.qwen /home/qwen/projects && \
+    ln -s /home/qwen/projects/sandbox /home/qwen/workspace && \
     chown -R qwen:qwen /home/qwen
 
 # Base settings: model providers via env keys (credentials are never baked

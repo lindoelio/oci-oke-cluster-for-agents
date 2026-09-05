@@ -25,7 +25,7 @@ module "oke" {
   kubernetes_version                = var.oci_oke_kubernetes_version
   control_plane_is_public           = true
   assign_public_ip_to_control_plane = true
-  control_plane_allowed_cidrs       = ["0.0.0.0/0"]
+  control_plane_allowed_cidrs       = var.oci_control_plane_allowed_cidrs
 
   load_balancers          = "public"
   preferred_load_balancer = "public"

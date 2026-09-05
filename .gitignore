@@ -40,6 +40,10 @@ kubeconfig
 # macOS
 .DS_Store
 
+# Python bytecode from local test runs
+__pycache__/
+*.pyc
+
 # IDE
 .idea/
 .vscode/

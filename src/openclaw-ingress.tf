@@ -1,15 +1,15 @@
 ################################################################################
 # OpenClaw Ingress
-# Exposes the OpenClaw operator Service via NGINX Ingress for API access.
+# Exposes the OpenClaw operator Service through OCI Native Ingress.
 ################################################################################
 
 resource "kubectl_manifest" "openclaw_ingress" {
-  count = var.enable_openclaw ? 1 : 0
+  count = local.openclaw_public ? 1 : 0
 
   depends_on = [
-    helm_release.nginx_ingress,
     time_sleep.wait_for_ingress_lb,
     kubectl_manifest.openclaw_instance,
+    kubectl_manifest.letsencrypt_issuer,
   ]
 
   manifest = {
@@ -20,12 +20,17 @@ resource "kubectl_manifest" "openclaw_ingress" {
       namespace = "openclaw"
       annotations = merge(
         {
-          "kubernetes.io/ingress.class" = "nginx"
+          "oci-native-ingress.oraclecloud.com/backend-tls-enabled" = "false"
         },
-        var.openclaw_custom_domain != "" ? {
-          "cert-manager.io/cluster-issuer"           = "letsencrypt-prod"
-          "nginx.ingress.kubernetes.io/ssl-redirect" = "true"
-        } : {}
+        local.openclaw_tls ? merge({
+          "oci-native-ingress.oraclecloud.com/https-listener-port" = "443"
+          }, local.shared_listener_tls ? {
+          "oci-native-ingress.oraclecloud.com/certificate-ocid" = var.oci_native_shared_certificate_ocid
+          } : {
+          "cert-manager.io/cluster-issuer" = "letsencrypt-prod"
+        }) : {
+          "oci-native-ingress.oraclecloud.com/http-listener-port" = "80"
+        }
       )
     }
     spec = {
@@ -50,7 +55,8 @@ resource "kubectl_manifest" "openclaw_ingress" {
           }
         }
       ]
-      tls = var.openclaw_custom_domain != "" && var.letsencrypt_email != "" ? [
+      ingressClassName = local.ingress_class
+      tls = local.openclaw_tls && !local.shared_listener_tls ? [
         {
           hosts      = [var.openclaw_custom_domain]
           secretName = "openclaw-tls"
@@ -61,7 +67,7 @@ resource "kubectl_manifest" "openclaw_ingress" {
 }
 
 resource "time_sleep" "after_openclaw_ingress" {
-  count = var.enable_openclaw ? 1 : 0
+  count = local.openclaw_public ? 1 : 0
 
   depends_on      = [kubectl_manifest.openclaw_ingress]
   create_duration = "30s"

@@ -1,6 +1,6 @@
 ################################################################################
 # metrics-server — node/pod resource metrics for kubectl top and scheduling
-# decisions on the single Free Tier node.
+# visibility on the configured node pool.
 ################################################################################
 
 resource "helm_release" "metrics_server" {

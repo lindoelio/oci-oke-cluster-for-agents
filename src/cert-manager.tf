@@ -1,14 +1,14 @@
 ################################################################################
-# cert-manager — Automatic TLS certificate management
-# Deploys cert-manager via Helm and creates a Let's Encrypt ClusterIssuer.
-################################################################################
-
-################################################################################
-# cert-manager Helm Release
+# cert-manager
+#
+# OCI Native Ingress uses cert-manager for its admission webhooks. When an ACME
+# email is set, the same installation issues application certificates. OKE
+# add-on management requires an Enhanced cluster, so Basic clusters use the
+# upstream Helm chart to avoid the Enhanced control-plane charge.
 ################################################################################
 
 resource "helm_release" "cert_manager" {
-  count = (var.enable_paperclip && var.paperclip_exposure == "public") || (var.enable_opencode && var.opencode_exposure == "public") ? 1 : 0
+  count = local.ingress_enabled ? 1 : 0
 
   depends_on = [module.oke, time_sleep.after_cluster]
 
@@ -16,34 +16,29 @@ resource "helm_release" "cert_manager" {
   namespace  = "cert-manager"
   repository = "https://charts.jetstack.io"
   chart      = "cert-manager"
-  version    = "1.16.2"
+  version    = var.cert_manager_version
 
   create_namespace = true
+  wait             = true
 
-  values = [
-    <<-EOF
-    installCRDs: true
-    EOF
-  ]
+  values = [yamlencode({
+    crds = {
+      enabled = true
+    }
+  })]
+
+  timeout = 1800
 }
 
-################################################################################
-# Wait for cert-manager readiness
-################################################################################
-
 resource "time_sleep" "wait_for_cert_manager" {
-  count = (var.enable_paperclip && var.paperclip_exposure == "public") || (var.enable_opencode && var.opencode_exposure == "public") ? 1 : 0
+  count = local.ingress_enabled ? 1 : 0
 
   depends_on      = [helm_release.cert_manager]
   create_duration = "60s"
 }
 
-################################################################################
-# Let's Encrypt ClusterIssuer
-################################################################################
-
 resource "kubectl_manifest" "letsencrypt_issuer" {
-  count = ((var.enable_paperclip && var.paperclip_exposure == "public") || (var.enable_opencode && var.opencode_exposure == "public")) && var.letsencrypt_email != "" ? 1 : 0
+  count = local.tls_enabled ? 1 : 0
 
   depends_on = [time_sleep.wait_for_cert_manager]
 
@@ -64,12 +59,46 @@ resource "kubectl_manifest" "letsencrypt_issuer" {
           {
             http01 = {
               ingress = {
-                class = "nginx"
+                ingressClassName = local.ingress_class
+                ingressTemplate = {
+                  metadata = {
+                    annotations = {
+                      "oci-native-ingress.oraclecloud.com/http-listener-port" = "80"
+                    }
+                  }
+                }
               }
             }
           }
         ]
       }
+    }
+  }
+}
+
+# A single SAN certificate is required in OCI regions where an HTTPS listener
+# accepts only one certificate. Paperclip keeps the Kubernetes secret attached
+# so OCI Native imports renewals; Qwen references that same OCI certificate.
+resource "kubectl_manifest" "agents_certificate" {
+  count = local.shared_listener_tls ? 1 : 0
+
+  depends_on = [kubectl_manifest.letsencrypt_issuer]
+
+  manifest = {
+    apiVersion = "cert-manager.io/v1"
+    kind       = "Certificate"
+    metadata = {
+      name      = "agents-tls"
+      namespace = "paperclip"
+    }
+    spec = {
+      secretName = "agents-tls"
+      issuerRef = {
+        name = "letsencrypt-prod"
+        kind = "ClusterIssuer"
+      }
+      dnsNames = local.tls_hosts
+      usages   = ["digital signature", "key encipherment"]
     }
   }
 }

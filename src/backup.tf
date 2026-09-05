@@ -1,10 +1,10 @@
 ################################################################################
-# Free-tier backups — Object Storage (10 GB Always Free) + daily CronJobs
-# Backs up Paperclip's PostgreSQL, paperclip-data and opencode-data so all
-# persistent data survives node replacements and accidental volume deletion.
+# Backup jobs — Object Storage + daily CronJobs
+# Covers Paperclip's PostgreSQL, paperclip-data and opencode-data only.
+# Uploads are unbounded (no retention policy); monitor storage and test restore.
 # PVCs are namespace-scoped, so each CronJob runs in its own namespace.
-# Restore: curl the read PAR (output backup_read_url), then kubectl cp files
-# back into the pods/volumes.
+# Restore requires the dated object name appended to backup_read_url and an
+# application-specific recovery procedure. Live file archives are not atomic.
 ################################################################################
 
 data "oci_objectstorage_namespace" "project" {
@@ -89,8 +89,8 @@ resource "kubectl_manifest" "backup_par_secret_opencode" {
   }
 }
 
-# NOTE: the backup pods mount RWO PVCs, which only works while the cluster runs
-# on a single node. If scaling back to 2+ nodes, switch to volume snapshots.
+# RWO volumes can be shared by pods on the same node. Required pod affinity
+# places each backup beside the workload whose data PVC it reads.
 resource "kubectl_manifest" "backup_cronjob" {
   count = var.enable_paperclip ? 1 : 0
 
@@ -121,27 +121,40 @@ resource "kubectl_manifest" "backup_cronjob" {
           template = {
             spec = {
               restartPolicy = "OnFailure"
-              initContainers = [
+              affinity = {
+                podAffinity = {
+                  requiredDuringSchedulingIgnoredDuringExecution = [{
+                    labelSelector = { matchLabels = { app = "paperclip" } }
+                    topologyKey   = "kubernetes.io/hostname"
+                  }]
+                }
+              }
+              containers = [
                 {
-                  name  = "dump"
+                  name  = "backup"
                   image = "docker.io/library/postgres:17-alpine"
+                  # Stream directly to Object Storage. Buffering the entire data
+                  # archive on the worker can exhaust its boot volume.
                   command = ["sh", "-c", trimspace(<<-EOT
-                    set -e
-                    D=$(date -u +%Y-%m-%d)
-                    pg_dump --dbname="$DATABASE_URL" --format=custom --file=/backup/paperclip-db-$D.dump
-                    tar czf /backup/paperclip-data-$D.tgz -C /data/paperclip .
-                    ls -lh /backup
+                    set -eu
+                    set -o pipefail
+                    apk add --no-cache curl >/dev/null
+                    D=$(date -u +%Y-%m-%dT%H%M%SZ)
+                    echo "streaming PostgreSQL backup"
+                    pg_dump --dbname="$DATABASE_URL" --format=custom | curl --silent --show-error --fail --upload-file - "$WRITE_URL"paperclip-db-$D.dump
+                    echo "streaming persistent files"
+                    tar czf - -C /data/paperclip . | curl --silent --show-error --fail --upload-file - "$WRITE_URL"paperclip-data-$D.tgz
+                    echo "backup upload complete: $D"
                   EOT
                   )]
                   env = [
                     {
-                      name = "DATABASE_URL"
-                      valueFrom = {
-                        secretKeyRef = {
-                          name = "paperclip-db"
-                          key  = "DATABASE_URL"
-                        }
-                      }
+                      name      = "DATABASE_URL"
+                      valueFrom = { secretKeyRef = { name = "paperclip-db", key = "DATABASE_URL" } }
+                    },
+                    {
+                      name      = "WRITE_URL"
+                      valueFrom = { secretKeyRef = { name = "oci-backup-par", key = "WRITE_URL" } }
                     }
                   ]
                   volumeMounts = [
@@ -149,78 +162,18 @@ resource "kubectl_manifest" "backup_cronjob" {
                       name      = "paperclip-data"
                       mountPath = "/data/paperclip"
                       readOnly  = true
-                    },
-                    {
-                      name      = "backup-scratch"
-                      mountPath = "/backup"
                     }
                   ]
                   resources = {
-                    requests = {
-                      cpu    = "50m"
-                      memory = "128Mi"
-                    }
-                    limits = {
-                      cpu    = "200m"
-                      memory = "256Mi"
-                    }
-                  }
-                }
-              ]
-              containers = [
-                {
-                  name  = "upload"
-                  image = "docker.io/curlimages/curl:8.14.1"
-                  command = ["sh", "-c", trimspace(<<-EOT
-                    set -e
-                    for f in /backup/*; do
-                      name=$(basename "$f")
-                      echo "uploading $name"
-                      curl --silent --show-error --fail --upload-file "$f" "$WRITE_URL$name"
-                    done
-                    echo "backup upload complete"
-                  EOT
-                  )]
-                  env = [
-                    {
-                      name = "WRITE_URL"
-                      valueFrom = {
-                        secretKeyRef = {
-                          name = "oci-backup-par"
-                          key  = "WRITE_URL"
-                        }
-                      }
-                    }
-                  ]
-                  volumeMounts = [
-                    {
-                      name      = "backup-scratch"
-                      mountPath = "/backup"
-                      readOnly  = true
-                    }
-                  ]
-                  resources = {
-                    requests = {
-                      cpu    = "10m"
-                      memory = "32Mi"
-                    }
-                    limits = {
-                      cpu    = "100m"
-                      memory = "64Mi"
-                    }
+                    requests = { cpu = "50m", memory = "128Mi", ephemeral-storage = "64Mi" }
+                    limits   = { cpu = "500m", memory = "256Mi", ephemeral-storage = "256Mi" }
                   }
                 }
               ]
               volumes = [
                 {
-                  name = "paperclip-data"
-                  persistentVolumeClaim = {
-                    claimName = "paperclip-data"
-                  }
-                },
-                {
-                  name     = "backup-scratch"
-                  emptyDir = {}
+                  name                  = "paperclip-data"
+                  persistentVolumeClaim = { claimName = "paperclip-data" }
                 }
               ]
             }
@@ -260,6 +213,14 @@ resource "kubectl_manifest" "backup_cronjob_opencode" {
           template = {
             spec = {
               restartPolicy = "OnFailure"
+              affinity = {
+                podAffinity = {
+                  requiredDuringSchedulingIgnoredDuringExecution = [{
+                    labelSelector = { matchLabels = { app = "opencode" } }
+                    topologyKey   = "kubernetes.io/hostname"
+                  }]
+                }
+              }
               initContainers = [
                 {
                   name  = "dump"

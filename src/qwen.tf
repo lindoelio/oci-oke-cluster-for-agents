@@ -91,7 +91,7 @@ resource "random_password" "qwen_admin" {
 }
 
 locals {
-  qwen_admin_password = var.qwen_admin_password != "" ? var.qwen_admin_password : random_password.qwen_admin[0].result
+  qwen_admin_password = var.enable_qwen ? (var.qwen_admin_password != "" ? var.qwen_admin_password : random_password.qwen_admin[0].result) : null
 }
 
 # Bearer token required by qwen serve on every API request (non-loopback bind).
@@ -250,7 +250,47 @@ resource "kubectl_manifest" "qwen_deployment" {
           securityContext = {
             fsGroup = 1000
           }
-          initContainers = concat(var.enable_qwen_browser ? [
+          initContainers = concat([
+            {
+              # qwen-code 0.23 refuses to boot the Conversations runtime
+              # unless the state base dir is owned by the daemon uid and the
+              # managed scratch root is owner-only. Legacy PVC state predates
+              # both checks (root-owned dir, fsGroup setgid modes), so repair
+              # it as root before the daemon starts.
+              name    = "volume-ownership"
+              image   = docker_image.qwen[count.index].name
+              command = ["sh", "-c"]
+              args = [
+                <<-EOT
+                set -e
+                chown -R qwen:ubuntu /home/qwen/.qwen
+                if [ -d /home/qwen/.qwen/scratch-workspaces ]; then
+                  chmod 700 /home/qwen/.qwen/scratch-workspaces
+                fi
+                EOT
+              ]
+              securityContext = {
+                runAsUser = 0
+              }
+              volumeMounts = [
+                {
+                  name      = "qwen-data"
+                  mountPath = "/home/qwen/.qwen"
+                  subPath   = "state"
+                }
+              ]
+              resources = {
+                requests = {
+                  cpu    = "10m"
+                  memory = "32Mi"
+                }
+                limits = {
+                  cpu    = "200m"
+                  memory = "128Mi"
+                }
+              }
+            }
+            ], var.enable_qwen_browser ? [
             {
               # Playwright client library on the PVC (the browsers live in the
               # shared paperclip-browser service; the client connects over CDP).
@@ -298,7 +338,7 @@ resource "kubectl_manifest" "qwen_deployment" {
                 set -e
                 [ -f /home/qwen/.qwen/settings.json ] || cp /usr/local/share/qwen-settings.json /home/qwen/.qwen/settings.json
                 [ -f /home/qwen/.qwen/QWEN.md ] || cp /usr/local/share/qwen-QWEN.md /home/qwen/.qwen/QWEN.md
-                mkdir -p /home/qwen/workspace
+                mkdir -p /home/qwen/projects/sandbox
                 EOT
               ]
               volumeMounts = [
@@ -309,7 +349,7 @@ resource "kubectl_manifest" "qwen_deployment" {
                 },
                 {
                   name      = "qwen-data"
-                  mountPath = "/home/qwen/workspace"
+                  mountPath = "/home/qwen/projects"
                   subPath   = "workspaces"
                 }
               ]
@@ -334,7 +374,11 @@ resource "kubectl_manifest" "qwen_deployment" {
                 "serve",
                 "--hostname", "0.0.0.0",
                 "--port", "4170",
-                "--workspace", "/home/qwen/workspace",
+                "--workspace", "/home/qwen/projects/sandbox",
+                # The Web Shell terminal posts to /session/:id/shell, which
+                # stays disabled unless opted in (token auth is already
+                # mandatory on this non-loopback bind).
+                "--enable-session-shell",
               ]
               ports = [
                 {
@@ -357,6 +401,12 @@ resource "kubectl_manifest" "qwen_deployment" {
                     # Headless container: never try to open a browser.
                     name  = "BROWSER"
                     value = "none"
+                  },
+                  {
+                    # Keep memories isolated when sibling repository
+                    # directories are registered as separate workspaces.
+                    name  = "QWEN_CODE_MEMORY_PROJECT_SCOPE"
+                    value = "workspace"
                   },
                   {
                     # Browser automation via the shared paperclip-browser
@@ -408,8 +458,8 @@ resource "kubectl_manifest" "qwen_deployment" {
               )
               resources = {
                 requests = {
-                  cpu    = "100m"
-                  memory = "256Mi"
+                  cpu    = "500m"
+                  memory = "1Gi"
                 }
                 limits = {
                   cpu    = var.qwen_cpu_limit
@@ -437,10 +487,10 @@ resource "kubectl_manifest" "qwen_deployment" {
                   subPath   = "state"
                 },
                 {
-                  # Project workspaces live on the PVC so sessions survive
-                  # image rebuilds (the image layer is ephemeral).
+                  # The PVC root contains sibling repository workspaces. The
+                  # empty sandbox is the fallback when a client omits cwd.
                   name      = "qwen-data"
-                  mountPath = "/home/qwen/workspace"
+                  mountPath = "/home/qwen/projects"
                   subPath   = "workspaces"
                 },
                 {
@@ -523,10 +573,10 @@ resource "kubectl_manifest" "qwen_deployment" {
 # Service + Ingress
 ################################################################################
 
-# Minimal nginx that only validates credentials (Basic or Bearer) for the
-# ingress auth-url. Using it instead of auth-type=basic keeps the client's
-# Authorization header intact end-to-end (the qwen Web Shell authenticates
-# its API calls with the bearer token).
+# Authentication and Origin-rewriting proxy in front of Qwen. Keeping this at
+# the service boundary makes the protection independent of ingress-specific
+# middleware: Basic credentials are validated and translated to the daemon
+# token, while Bearer credentials pass through for daemon validation.
 resource "kubectl_manifest" "qwen_auth_deployment" {
   count = var.enable_qwen ? 1 : 0
 
@@ -559,27 +609,35 @@ resource "kubectl_manifest" "qwen_auth_deployment" {
         spec = {
           containers = [
             {
-              name    = "auth"
+              name    = "gateway"
               image   = "docker.io/nginxinc/nginx-unprivileged:1.27-alpine"
               command = ["sh", "-c"]
               args = [
                 <<-EOT
                 cat > /etc/nginx/conf.d/default.conf <<'NGINX'
+                map $http_authorization $qwen_auth_realm {
+                  ~*^Bearer\s+ off;
+                  default "QwenCode Web";
+                }
+                map $http_authorization $qwen_upstream_authorization {
+                  ~*^Bearer\s+ $http_authorization;
+                  default "Bearer __TOKEN__";
+                }
                 server {
-                  listen 8080;
+                  listen 8081;
                   location / {
-                    if ($http_authorization ~* "^Bearer ") {
-                      return 204;
-                    }
-                    auth_basic "QwenCode Web";
+                    auth_basic $qwen_auth_realm;
                     auth_basic_user_file /etc/nginx/auth.htpasswd;
-                    # Translate the browser's Basic auth into the daemon's
-                    # bearer token: ingress copies this response header into
-                    # the proxied request (auth-response-headers).
-                    add_header Authorization "Bearer __TOKEN__";
-                    # Content-phase 204: runs AFTER auth_basic (a rewrite-phase
-                    # `return` would skip the access phase entirely).
-                    try_files /nonexistent =204;
+                    proxy_pass http://qwen.qwen.svc.cluster.local:80;
+                    proxy_http_version 1.1;
+                    proxy_set_header Authorization $qwen_upstream_authorization;
+                    proxy_set_header Origin "http://127.0.0.1:4170";
+                    proxy_set_header Host $host;
+                    proxy_set_header Connection "";
+                    proxy_buffering off;
+                    proxy_read_timeout 3600s;
+                    proxy_send_timeout 3600s;
+                    client_max_body_size 50m;
                   }
                 }
                 NGINX
@@ -605,46 +663,6 @@ resource "kubectl_manifest" "qwen_auth_deployment" {
                   subPath   = "auth"
                   readOnly  = true
                 }
-              ]
-              resources = {
-                requests = {
-                  cpu    = "5m"
-                  memory = "16Mi"
-                }
-                limits = {
-                  cpu    = "50m"
-                  memory = "64Mi"
-                }
-              }
-            },
-            {
-              # Reverse proxy in front of the daemon: the Web Shell only
-              # accepts loopback Origins, so rewrite the browser's Origin to
-              # the daemon's own bind URL. The Authorization header arrives
-              # already translated to the bearer by the auth flow.
-              name    = "proxy"
-              image   = "docker.io/nginxinc/nginx-unprivileged:1.27-alpine"
-              command = ["sh", "-c"]
-              args = [
-                <<-EOT
-                cat > /etc/nginx/conf.d/default.conf <<'NGINX'
-                server {
-                  listen 8081;
-                  location / {
-                    proxy_pass http://qwen.qwen.svc.cluster.local:80;
-                    proxy_http_version 1.1;
-                    proxy_set_header Origin "http://127.0.0.1:4170";
-                    proxy_set_header Host $host;
-                    proxy_set_header Connection "";
-                    proxy_buffering off;
-                    proxy_read_timeout 3600s;
-                    proxy_send_timeout 3600s;
-                    client_max_body_size 50m;
-                  }
-                }
-                NGINX
-                exec nginx -g 'daemon off;'
-                EOT
               ]
               resources = {
                 requests = {
@@ -685,7 +703,7 @@ resource "kubectl_manifest" "qwen_auth_service" {
       namespace = "qwen"
     }
     spec = {
-      type = "ClusterIP"
+      type = local.qwen_public ? "NodePort" : "ClusterIP"
       ports = [
         {
           # Main entrypoint: the Origin-rewriting proxy in front of the daemon.
@@ -693,13 +711,6 @@ resource "kubectl_manifest" "qwen_auth_service" {
           targetPort = 8081
           protocol   = "TCP"
           name       = "http"
-        },
-        {
-          # Credential validator used by the ingress auth-url.
-          port       = 8080
-          targetPort = 8080
-          protocol   = "TCP"
-          name       = "auth"
         }
       ]
       selector = {
@@ -743,14 +754,14 @@ resource "kubectl_manifest" "qwen_service" {
 }
 
 resource "kubectl_manifest" "qwen_ingress" {
-  count = var.enable_qwen ? 1 : 0
+  count = local.qwen_public ? 1 : 0
 
   depends_on = [
-    helm_release.nginx_ingress,
     time_sleep.wait_for_ingress_lb,
     kubectl_manifest.qwen_service,
     kubectl_manifest.qwen_auth_service,
     kubectl_manifest.qwen_auth_deployment,
+    kubectl_manifest.letsencrypt_issuer,
   ]
 
   manifest = {
@@ -761,30 +772,21 @@ resource "kubectl_manifest" "qwen_ingress" {
       namespace = "qwen"
       annotations = merge(
         {
-          "kubernetes.io/ingress.class" = "nginx"
-          # Browser gate via auth_request against a dedicated validator that
-          # accepts Basic OR Bearer: unlike auth-type=basic this never
-          # clobbers the client's Authorization header, so the qwen bearer
-          # token still reaches the daemon.
-          "nginx.ingress.kubernetes.io/auth-url" = "http://qwen-auth.qwen.svc.cluster.local:8080/"
-          # Copy the validator's Authorization response header (the daemon
-          # bearer, set after successful basic auth) into the proxied request,
-          # and keep WWW-Authenticate so browsers show the login dialog.
-          "nginx.ingress.kubernetes.io/auth-response-headers" = "Authorization, WWW-Authenticate"
-          "nginx.ingress.kubernetes.io/proxy-read-timeout"    = "3600"
-          "nginx.ingress.kubernetes.io/proxy-send-timeout"    = "3600"
-          "nginx.ingress.kubernetes.io/proxy-body-size"       = "50m"
+          "oci-native-ingress.oraclecloud.com/backend-tls-enabled" = "false"
         },
-        var.qwen_custom_domain != "" ? {
-          "cert-manager.io/cluster-issuer"           = "letsencrypt-prod"
-          "nginx.ingress.kubernetes.io/ssl-redirect" = "true"
+        local.qwen_tls ? merge({
+          "oci-native-ingress.oraclecloud.com/https-listener-port" = "443"
+          }, local.shared_listener_tls ? {
+          "oci-native-ingress.oraclecloud.com/certificate-ocid" = var.oci_native_shared_certificate_ocid
           } : {
-          "nginx.ingress.kubernetes.io/rewrite-target" = "/$2"
+          "cert-manager.io/cluster-issuer" = "letsencrypt-prod"
+          }) : {
+          "oci-native-ingress.oraclecloud.com/http-listener-port" = "80"
         }
       )
     }
     spec = merge(
-      var.qwen_custom_domain != "" ? {
+      local.qwen_tls && !local.shared_listener_tls ? {
         tls = [
           {
             hosts      = [var.qwen_custom_domain]
@@ -793,14 +795,15 @@ resource "kubectl_manifest" "qwen_ingress" {
         ]
       } : {},
       {
+        ingressClassName = local.ingress_class
         rules = [
           {
-            host = var.qwen_custom_domain != "" ? var.qwen_custom_domain : null
+            host = var.qwen_custom_domain
             http = {
               paths = [
                 {
-                  path     = var.qwen_custom_domain != "" ? "/" : "/qwen(/|$)(.*)"
-                  pathType = var.qwen_custom_domain != "" ? "Prefix" : "ImplementationSpecific"
+                  path     = "/"
+                  pathType = "Prefix"
                   backend = {
                     service = {
                       name = "qwen-auth"

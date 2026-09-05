@@ -42,9 +42,19 @@ variable "oci_project_compartment_id" {
 }
 
 variable "oci_public_workers" {
-  description = "Place worker nodes in a public subnet (no NAT Gateway, no Service Gateway). Saves cost but exposes nodes with public IPs."
+  description = "Place worker nodes in a public subnet and disable NAT Gateway creation; exposes nodes with public IPs. Review network pricing and access rules."
   type        = bool
   default     = false
+}
+
+variable "oci_control_plane_allowed_cidrs" {
+  description = "CIDRs allowed to reach the Kubernetes API. Restrict to operator/VPN egress addresses before deployment."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.oci_control_plane_allowed_cidrs) > 0 && alltrue([for cidr in var.oci_control_plane_allowed_cidrs : can(cidrnetmask(cidr))])
+    error_message = "Provide at least one valid IPv4 CIDR for Kubernetes API access."
+  }
 }
 
 
@@ -77,13 +87,13 @@ variable "oci_oke_node_pool_size" {
 variable "oci_oke_kubernetes_version" {
   description = "OCI OKE Kubernetes version"
   type        = string
-  default     = "v1.36.0"
+  default     = "v1.36.1"
 }
 
 ### Paperclip (Agent Orchestration Platform)
 
 variable "enable_paperclip" {
-  description = "Deploy Paperclip with managed PostgreSQL"
+  description = "Deploy Paperclip with a self-managed PostgreSQL StatefulSet"
   type        = bool
   default     = true
 }
@@ -95,9 +105,9 @@ variable "paperclip_image_repository" {
 }
 
 variable "paperclip_image_tag" {
-  description = "Paperclip application image tag"
+  description = "Pinned Paperclip stable release image tag"
   type        = string
-  default     = "latest"
+  default     = "2026.831.1"
 }
 
 variable "enable_paperclip_qmd" {
@@ -183,9 +193,9 @@ variable "deepinfra_api_key_secondary" {
 }
 
 variable "paperclip_exposure" {
-  description = "Paperclip service exposure: 'public' (LoadBalancer) or 'private' (ClusterIP)"
+  description = "Paperclip service exposure: 'public' (shared Ingress) or 'private' (ClusterIP)"
   type        = string
-  default     = "public"
+  default     = "private"
 
   validation {
     condition     = contains(["public", "private"], var.paperclip_exposure)
@@ -200,39 +210,51 @@ variable "paperclip_public_url" {
 }
 
 variable "paperclip_custom_domain" {
-  description = "Custom domain for Paperclip (e.g., 'paperclip.example.com'). If set, HTTPS + Let's Encrypt is enabled."
+  description = "Custom domain for Paperclip. HTTPS also requires letsencrypt_email, DNS, and successful certificate issuance."
   type        = string
   default     = ""
 }
 
-variable "nginx_ingress_chart_version" {
-  description = "NGINX Ingress Controller Helm chart version"
+variable "oci_native_ingress_version" {
+  description = "OCI Native Ingress Controller standalone Helm chart and image version"
   type        = string
-  default     = "4.12.0"
+  default     = "1.4.5"
+}
+
+variable "oci_native_shared_certificate_ocid" {
+  description = "OCI Certificates OCID for the shared HTTPS listener when Paperclip and Qwen use the same OCI Native load balancer. Obtain it after the controller imports the agents-tls secret."
+  type        = string
+  default     = ""
+}
+
+variable "cert_manager_version" {
+  description = "cert-manager Helm chart version compatible with the selected Kubernetes version"
+  type        = string
+  default     = "1.21.1"
 }
 
 variable "paperclip_db_storage_size" {
-  description = "Storage size for Paperclip's managed PostgreSQL"
+  description = "Storage request for Paperclip's self-managed PostgreSQL (OCI Block Volume minimum: 50 GB)"
   type        = string
-  default     = "10Gi"
+  default     = "50Gi"
 }
 
 variable "paperclip_storage_size" {
   description = "Storage size for Paperclip data persistence"
   type        = string
-  default     = "5Gi"
+  default     = "50Gi"
 }
 
 variable "paperclip_cpu_limit" {
   description = "CPU limit for Paperclip instance"
   type        = string
-  default     = "1000m"
+  default     = "1500m"
 }
 
 variable "paperclip_memory_limit" {
   description = "Memory limit for Paperclip instance"
   type        = string
-  default     = "4Gi"
+  default     = "6Gi"
 }
 
 variable "paperclip_cheap_model" {
@@ -270,7 +292,7 @@ variable "openai_api_key" {
 }
 
 variable "letsencrypt_email" {
-  description = "Email address for Let's Encrypt ACME account (certificate expiry notifications)"
+  description = "Email address for the optional Let's Encrypt ClusterIssuer managed through the OKE CertManager add-on"
   type        = string
   default     = ""
 }
@@ -280,7 +302,7 @@ variable "letsencrypt_email" {
 variable "enable_openclaw" {
   description = "Deploy OpenClaw operator and instance"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "openclaw_chart_version" {
@@ -323,7 +345,7 @@ variable "openclaw_llm_api_key" {
 variable "openclaw_storage_size" {
   description = "Storage size for OpenClaw workspace"
   type        = string
-  default     = "5Gi"
+  default     = "50Gi"
 }
 
 variable "openclaw_cpu_limit" {
@@ -368,13 +390,13 @@ variable "openclaw_custom_domain" {
 variable "enable_opencode" {
   description = "Deploy OpenCode Web with managed workspace persistence"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "opencode_exposure" {
   description = "OpenCode service exposure: 'public' (Ingress, requires an ingress controller) or 'private' (ClusterIP only)"
   type        = string
-  default     = "public"
+  default     = "private"
 
   validation {
     condition     = contains(["public", "private"], var.opencode_exposure)
@@ -407,16 +429,10 @@ variable "opencode_custom_domain" {
   default     = ""
 }
 
-variable "opencode_path_prefix" {
-  description = "URL path prefix for OpenCode Web when no custom domain is configured (e.g., '/opencode')"
-  type        = string
-  default     = "/opencode"
-}
-
 variable "opencode_storage_size" {
   description = "Storage size for OpenCode workspace persistence"
   type        = string
-  default     = "5Gi"
+  default     = "50Gi"
 }
 
 variable "opencode_cpu_limit" {
@@ -434,13 +450,13 @@ variable "opencode_memory_limit" {
 variable "enable_qwen" {
   description = "Deploy QwenCode Web (qwen serve daemon + Web Shell UI) with managed workspace persistence"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "qwen_version" {
-  description = "Qwen Code CLI version (npm @qwen-code/qwen-code tag, e.g., '0.22.2')"
+  description = "Qwen Code CLI version (npm @qwen-code/qwen-code tag, e.g., '0.23.0')"
   type        = string
-  default     = "0.22.2"
+  default     = "0.23.0"
 }
 
 variable "qwen_admin_password" {
@@ -459,19 +475,19 @@ variable "qwen_custom_domain" {
 variable "qwen_storage_size" {
   description = "Storage size for QwenCode state and workspace persistence"
   type        = string
-  default     = "5Gi"
+  default     = "50Gi"
 }
 
 variable "qwen_cpu_limit" {
   description = "CPU limit for the QwenCode daemon container"
   type        = string
-  default     = "500m"
+  default     = "1500m"
 }
 
 variable "qwen_memory_limit" {
   description = "Memory limit for the QwenCode daemon container"
   type        = string
-  default     = "4Gi"
+  default     = "6Gi"
 }
 
 variable "enable_qwen_browser" {

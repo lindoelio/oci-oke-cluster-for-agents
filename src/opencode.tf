@@ -1,7 +1,7 @@
 ################################################################################
 # OpenCode — AI Coding Assistant (Web)
 # Deploys OpenCode Web from a locally-built container image pushed to an
-# external registry. Exposed via the shared NGINX Ingress Controller.
+# external registry. Optionally exposed via OCI Native Ingress.
 # Image: built from official anomalyco/opencode release (ARM64)
 ################################################################################
 
@@ -29,8 +29,8 @@ resource "docker_image" "opencode" {
   }
 }
 
-# Image already built and pushed to docker.io/lindoelio/opencode:1.18.21
-# docker_registry_image resource removed — push completed manually due to provider digest bug
+# Registry push is an operator step; Terraform only builds the local image.
+# Publish the matching ARM64 tag before deploying the Kubernetes workload.
 
 resource "time_sleep" "after_opencode_image" {
   count = var.enable_opencode ? 1 : 0
@@ -69,9 +69,6 @@ resource "random_password" "opencode_admin" {
   length  = 32
   special = true
 
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 resource "kubectl_manifest" "opencode_auth_secret" {
@@ -740,7 +737,7 @@ resource "kubectl_manifest" "opencode_service" {
       }
     }
     spec = {
-      type = "ClusterIP"
+      type = local.opencode_public ? "NodePort" : "ClusterIP"
       ports = [
         {
           port       = 80
@@ -761,12 +758,12 @@ resource "kubectl_manifest" "opencode_service" {
 ################################################################################
 
 resource "kubectl_manifest" "opencode_ingress" {
-  count = var.enable_opencode ? 1 : 0
+  count = local.opencode_public ? 1 : 0
 
   depends_on = [
-    helm_release.nginx_ingress,
     time_sleep.wait_for_ingress_lb,
     kubectl_manifest.opencode_service,
+    kubectl_manifest.letsencrypt_issuer,
   ]
 
   manifest = {
@@ -777,26 +774,28 @@ resource "kubectl_manifest" "opencode_ingress" {
       namespace = "opencode"
       annotations = merge(
         {
-          "kubernetes.io/ingress.class" = "nginx"
+          "oci-native-ingress.oraclecloud.com/backend-tls-enabled" = "false"
         },
-        var.opencode_custom_domain != "" ? {
-          "cert-manager.io/cluster-issuer"           = "letsencrypt-prod"
-          "nginx.ingress.kubernetes.io/ssl-redirect" = "true"
-        } : {},
-        var.opencode_custom_domain == "" ? {
-          "nginx.ingress.kubernetes.io/rewrite-target" = "/$2"
-        } : {}
+        local.opencode_tls ? merge({
+          "oci-native-ingress.oraclecloud.com/https-listener-port" = "443"
+          }, local.shared_listener_tls ? {
+          "oci-native-ingress.oraclecloud.com/certificate-ocid" = var.oci_native_shared_certificate_ocid
+          } : {
+          "cert-manager.io/cluster-issuer" = "letsencrypt-prod"
+        }) : {
+          "oci-native-ingress.oraclecloud.com/http-listener-port" = "80"
+        }
       )
     }
     spec = {
       rules = [
         {
-          host = var.opencode_custom_domain != "" ? var.opencode_custom_domain : ""
+          host = var.opencode_custom_domain
           http = {
             paths = [
               {
-                path     = var.opencode_custom_domain != "" ? "/" : "${var.opencode_path_prefix}(/|$)(.*)"
-                pathType = var.opencode_custom_domain != "" ? "Prefix" : "ImplementationSpecific"
+                path     = "/"
+                pathType = "Prefix"
                 backend = {
                   service = {
                     name = "opencode"
@@ -810,7 +809,8 @@ resource "kubectl_manifest" "opencode_ingress" {
           }
         }
       ]
-      tls = var.opencode_custom_domain != "" && var.letsencrypt_email != "" ? [
+      ingressClassName = local.ingress_class
+      tls = local.opencode_tls && !local.shared_listener_tls ? [
         {
           hosts      = [var.opencode_custom_domain]
           secretName = "opencode-tls"
@@ -819,16 +819,10 @@ resource "kubectl_manifest" "opencode_ingress" {
     }
   }
 
-  lifecycle {
-    precondition {
-      condition     = var.enable_opencode && var.opencode_exposure == "public"
-      error_message = "OpenCode public exposure is required: set `opencode_exposure = \"public\"` or set `enable_opencode = false`."
-    }
-  }
 }
 
 resource "time_sleep" "after_opencode_ingress" {
-  count = var.enable_opencode ? 1 : 0
+  count = local.opencode_public ? 1 : 0
 
   depends_on      = [kubectl_manifest.opencode_ingress]
   create_duration = "30s"

@@ -1,6 +1,7 @@
 ################################################################################
 # Paperclip — AI Agent Orchestration Platform
-# Deploys Paperclip directly (no operator) with a managed PostgreSQL sidecar.
+# Deploys Paperclip directly (no operator) with a self-managed PostgreSQL
+# StatefulSet.
 # Image: ghcr.io/paperclipai/paperclip (ARM64 confirmed)
 #
 # qmd (local BM25 + vector + rerank search for agent memory recall) is
@@ -351,7 +352,7 @@ resource "kubectl_manifest" "paperclip_deployment" {
                 {
                   name = "PAPERCLIP_PUBLIC_URL"
                   value = var.paperclip_public_url != "" ? var.paperclip_public_url : (
-                    var.paperclip_custom_domain != "" ? "https://${var.paperclip_custom_domain}" : (
+                    var.paperclip_custom_domain != "" ? "${local.paperclip_tls ? "https" : "http"}://${var.paperclip_custom_domain}" : (
                       length(data.external.ingress_ip) > 0 ? "http://${data.external.ingress_ip[0].result["ip"]}" : "http://localhost:3100"
                     )
                   )
@@ -617,7 +618,7 @@ resource "kubectl_manifest" "paperclip_deployment" {
                 {
                   name = "PAPERCLIP_PUBLIC_URL"
                   value = var.paperclip_public_url != "" ? var.paperclip_public_url : (
-                    var.paperclip_custom_domain != "" ? "https://${var.paperclip_custom_domain}" : (
+                    var.paperclip_custom_domain != "" ? "${local.paperclip_tls ? "https" : "http"}://${var.paperclip_custom_domain}" : (
                       length(data.external.ingress_ip) > 0 ? "http://${data.external.ingress_ip[0].result["ip"]}" : "http://localhost:3100"
                     )
                   )
@@ -834,7 +835,7 @@ resource "kubectl_manifest" "paperclip_service" {
       }
     }
     spec = {
-      type = var.paperclip_exposure == "public" ? "ClusterIP" : "ClusterIP"
+      type = local.paperclip_public ? "NodePort" : "ClusterIP"
       ports = [
         {
           port       = 80

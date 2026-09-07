@@ -186,157 +186,287 @@
         "id": "glm-5.3-flash",
         "name": "[OpenCode Go] GLM-5.3-Flash",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "glm-5.3",
         "name": "[OpenCode Go] GLM-5.3",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "glm-5.2",
         "name": "[OpenCode Go] GLM-5.2",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "glm-5.1",
         "name": "[OpenCode Go] GLM-5.1",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "kimi-k3",
         "name": "[OpenCode Go] Kimi K3",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "kimi-k2.7-code",
         "name": "[OpenCode Go] Kimi K2.7 Code",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "kimi-k2.6",
         "name": "[OpenCode Go] Kimi K2.6",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "longcat-2.0",
         "name": "[OpenCode Go] LongCat-2.0",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "deepseek-v4-pro",
         "name": "[OpenCode Go] DeepSeek V4 Pro",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "deepseek-v4-flash",
         "name": "[OpenCode Go] DeepSeek V4 Flash",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "deepseek-v4-flash-vision-exp",
         "name": "[OpenCode Go] DeepSeek V4 Flash Vision Exp",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "mimo-v2.5",
         "name": "[OpenCode Go] MiMo-V2.5",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "mimo-v2.5-pro",
         "name": "[OpenCode Go] MiMo-V2.5-Pro",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "minimax-m3",
         "name": "[OpenCode Go] MiniMax M3",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "minimax-m2.7",
         "name": "[OpenCode Go] MiniMax M2.7",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "minimax-m2.5",
         "name": "[OpenCode Go] MiniMax M2.5",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "muse-spark-1.3-contributor",
         "name": "[OpenCode Go] Muse Spark 1.3 Contributor",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "muse-spark-1.2-contributor",
         "name": "[OpenCode Go] Muse Spark 1.2 Contributor",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "qwen3.8-max",
         "name": "[OpenCode Go] Qwen3.8 Max",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "qwen3.8-flash",
         "name": "[OpenCode Go] Qwen3.8 Flash",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "qwen3.7-max",
         "name": "[OpenCode Go] Qwen3.7 Max",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "qwen3.7-plus",
         "name": "[OpenCode Go] Qwen3.7 Plus",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "qwen3.6-plus",
         "name": "[OpenCode Go] Qwen3.6 Plus",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "hy4-preview",
         "name": "[OpenCode Go] Hy4 preview",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "hy3",
         "name": "[OpenCode Go] Hy3",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       },
       {
         "id": "omen-alpha",
         "name": "[OpenCode Go] Omen Alpha",
         "envKey": "OPENCODE_GO_API_KEY",
-        "baseUrl": "https://opencode.ai/zen/go/v1"
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "generationConfig": {
+          "customHeaders": {
+            "x-opencode-session": "qwen-code-web-oci-oke-agents"
+          }
+        }
       }
     ]
   }
